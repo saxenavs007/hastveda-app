@@ -1,0 +1,39 @@
+-- ============================================================
+-- HastVeda — Grants for server-side free-scan quota enforcement
+--
+-- The palm-analysis Edge Function now enforces the free tier's
+-- scans_per_month limit itself, keyed to the authenticated user_id, rather
+-- than trusting the client to do it. That check reads two things through the
+-- service client:
+--
+--   1. public.app_settings  — the configured 'free_tier_limits' value, so the
+--      limit can be changed without redeploying the function.
+--   2. public.palm_scans    — a COUNT of the user's scans in the current month.
+--
+-- palm_scans SELECT was already granted to service_role in
+-- 20260814000000_fix_palm_analysis_service_role_write_grants.sql.
+-- app_settings was not granted to service_role at all, so the limit lookup
+-- would fall back to its hardcoded default on every call.
+--
+-- NOTE: service_role has BYPASSRLS, but BYPASSRLS does NOT confer table
+-- privileges — an explicit GRANT is still required. This project does not have
+-- the stock Supabase default privileges in place.
+--
+-- SCOPE
+--   * One table-level GRANT to service_role.
+--   * No schema changes, no RLS changes, no privileges to anon/authenticated.
+-- ============================================================
+
+GRANT SELECT ON public.app_settings TO service_role;
+
+-- ============================================================
+-- Verification:
+--   SELECT table_name, privilege_type
+--     FROM information_schema.role_table_grants
+--    WHERE grantee = 'service_role'
+--      AND table_schema = 'public'
+--      AND table_name IN ('app_settings', 'palm_scans')
+--    ORDER BY table_name, privilege_type;
+--
+-- Expected: app_settings SELECT, palm_scans SELECT/INSERT/UPDATE.
+-- ============================================================
