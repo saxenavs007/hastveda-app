@@ -913,7 +913,8 @@ class _AskHastVedaScreenState extends State<AskHastVedaScreen> {
     final freeLeft = _freeQuotaPerPremium - _freeQuestionsUsed;
     final hasFreeLeft = freeLeft > 0;
 
-    return Column(
+    return SingleChildScrollView(
+      child: Column(
       children: [
         // Usage summary bar
         Container(
@@ -1155,7 +1156,8 @@ class _AskHastVedaScreenState extends State<AskHastVedaScreen> {
 
         // Question history
         if (_isLoading)
-          const Expanded(
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 48),
             child: Center(
               child: CircularProgressIndicator(color: AppTheme.primary),
             ),
@@ -1177,9 +1179,10 @@ class _AskHastVedaScreenState extends State<AskHastVedaScreen> {
             ),
           ),
           const SizedBox(height: 8),
-          Expanded(
-            child: ListView.builder(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 100),
+          ListView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
               itemCount: _questionHistory.length,
               itemBuilder: (context, index) {
                 final q = _questionHistory[index];
@@ -1401,6 +1404,8 @@ class _AskHastVedaScreenState extends State<AskHastVedaScreen> {
                               const SizedBox(height: 8),
                               Text(
                                 q['answer_text'] as String,
+                                softWrap: true,
+                                overflow: TextOverflow.visible,
                                 style: GoogleFonts.outfit(
                                   fontSize: 13,
                                   color: textPri,
@@ -1448,12 +1453,10 @@ class _AskHastVedaScreenState extends State<AskHastVedaScreen> {
                 );
               },
             ),
-          ),
         ] else
-          Expanded(
-            child: Center(
-              child: Padding(
-                padding: const EdgeInsets.all(32),
+          Center(
+            child: Padding(
+              padding: const EdgeInsets.all(32),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
@@ -1503,8 +1506,8 @@ class _AskHastVedaScreenState extends State<AskHastVedaScreen> {
                 ),
               ),
             ),
-          ),
       ],
+      ),
     );
   }
 
