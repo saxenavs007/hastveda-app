@@ -1,0 +1,7 @@
+project_id = "rizmfltarfwthysktjjz"
+
+[functions.cashfree-webhook]
+verify_jwt = false
+
+[functions.horoscope-insights]
+verify_jwt = true

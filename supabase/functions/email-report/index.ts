@@ -71,23 +71,26 @@ serve(async (req: Request) => {
     }
 
     // ── Get user email and name ─────────────────────────────────────────────
-    const userEmail = user.email;
+    // Auth email is the registered address. Profile email is the same value
+    // copied at signup, used only when the auth record has none.
+    let userEmail = user.email ?? "";
+    let userName = "";
+    try {
+      const { data: profile } = await serviceClient
+        .from("user_profiles")
+        .select("full_name, email")
+        .eq("id", user.id)
+        .maybeSingle();
+      userName = profile?.full_name || "";
+      if (!userEmail && profile?.email) userEmail = profile.email as string;
+    } catch (_) {}
+
     if (!userEmail) {
       return new Response(
         JSON.stringify({ error: "No email address on file.", code: "NO_EMAIL" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
-
-    let userName = "";
-    try {
-      const { data: profile } = await serviceClient
-        .from("user_profiles")
-        .select("full_name")
-        .eq("id", user.id)
-        .maybeSingle();
-      userName = profile?.full_name || "";
-    } catch (_) {}
 
     // ── Check Resend API key ────────────────────────────────────────────────
     if (!resendApiKey) {
@@ -107,6 +110,7 @@ serve(async (req: Request) => {
       method: "POST",
       headers: {
         "Authorization": authHeader,
+        "apikey": supabaseAnonKey,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
@@ -138,7 +142,13 @@ serve(async (req: Request) => {
     }
 
     // ── Convert PDF to base64 for email attachment ──────────────────────────
-    const pdfBase64 = btoa(String.fromCharCode(...pdfBytes));
+    // Chunked so a long detailed-report PDF does not overflow the call stack.
+    let pdfBinary = "";
+    const chunkSize = 0x8000;
+    for (let i = 0; i < pdfBytes.length; i += chunkSize) {
+      pdfBinary += String.fromCharCode(...pdfBytes.subarray(i, i + chunkSize));
+    }
+    const pdfBase64 = btoa(pdfBinary);
 
     const isHindi = locale === "hi";
     const dateStr = new Date().toLocaleDateString(isHindi ? "hi-IN" : "en-IN", {

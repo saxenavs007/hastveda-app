@@ -1116,26 +1116,35 @@ class SupabaseService {
   Future<Map<String, dynamic>?> getAppSettings(String key) =>
       getAppSetting(key);
 
-  /// Count how many palm scans the user has done this calendar month
+  /// Successful palm readings saved in the current Asia/Kolkata calendar month.
+  ///
+  /// A new account has no completed scans, so this is 0. Opening the camera,
+  /// capturing a photo, cancelling, or a failed analysis does not count.
   Future<int> getMonthlyScansCount() async {
     final userId = currentUserId;
     if (userId == null) return 0;
     try {
-      final startOfMonth = DateTime(
-        DateTime.now().year,
-        DateTime.now().month,
-        1,
-      ).toIso8601String();
       final response = await client
           .from('palm_scans')
           .select('id')
           .eq('user_id', userId)
-          .gte('created_at', startOfMonth)
+          .eq('status', 'completed')
+          .gte('created_at', _istMonthStartIso())
           .count(CountOption.exact);
       return response.count ?? 0;
     } on PostgrestException catch (e) {
       debugPrint('getMonthlyScansCount error: ${e.message}');
       return 0;
     }
+  }
+
+  /// Midnight at the start of the current calendar month in India (IST).
+  String _istMonthStartIso() {
+    final istNow = DateTime.now().toUtc().add(
+      const Duration(hours: 5, minutes: 30),
+    );
+    return DateTime.utc(istNow.year, istNow.month, 1)
+        .subtract(const Duration(hours: 5, minutes: 30))
+        .toIso8601String();
   }
 }

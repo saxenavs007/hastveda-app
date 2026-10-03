@@ -416,6 +416,53 @@ Generate a COMPREHENSIVE 19-section Detailed Palm Reading Report. Return ONLY va
 }`;
 }
 
+// Sends the PDF via email-report after the HTTP response is returned.
+// email-report builds the PDF and delivers it with Resend to the account email.
+function queueDetailedReportEmail(
+  supabaseUrl: string,
+  anonKey: string,
+  authHeader: string,
+  reportId: string,
+  locale: string,
+): boolean {
+  const task = fetch(`${supabaseUrl}/functions/v1/email-report`, {
+    method: "POST",
+    headers: {
+      Authorization: authHeader,
+      apikey: anonKey,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ report_id: reportId, locale }),
+  })
+    .then(async (res) => {
+      if (!res.ok) {
+        const text = await res.text();
+        console.error(
+          `[detailed-report] async email-report failed status=${res.status} body=${text}`,
+        );
+        return;
+      }
+      console.log(
+        `[detailed-report] async email-report accepted for report=${reportId}`,
+      );
+    })
+    .catch((err) => {
+      console.error("[detailed-report] async email-report trigger error:", err);
+    });
+
+  const runtime = (globalThis as {
+    EdgeRuntime?: { waitUntil: (promise: Promise<unknown>) => void };
+  }).EdgeRuntime;
+  if (runtime?.waitUntil) {
+    runtime.waitUntil(task);
+  } else {
+    console.warn(
+      "[detailed-report] EdgeRuntime.waitUntil unavailable; email task may be cancelled",
+    );
+  }
+  return true;
+}
+
 // ── Main handler ──────────────────────────────────────────────────────────────
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -539,6 +586,14 @@ serve(async (req) => {
         const content = existingReport.content as any;
         const hasNewFormat = content.executive_summary || content.head_line_analysis;
         if (hasNewFormat) {
+          const emailQueued = Boolean(user.email) &&
+            queueDetailedReportEmail(
+              supabaseUrl,
+              supabaseAnonKey,
+              authHeader,
+              existingReport.id,
+              language,
+            );
           return new Response(
             JSON.stringify({
               success: true,
@@ -546,6 +601,8 @@ serve(async (req) => {
               cached: true,
               report: existingReport.content,
               generated_at: existingReport.generated_at || existingReport.created_at,
+              email_queued: emailQueued,
+              email: user.email ?? null,
             }),
             { headers: { ...corsHeaders, "Content-Type": "application/json" } }
           );
@@ -702,6 +759,17 @@ serve(async (req) => {
       success: true,
     });
 
+    let emailQueued = false;
+    if (savedReport?.id && user.email) {
+      emailQueued = queueDetailedReportEmail(
+        supabaseUrl,
+        supabaseAnonKey,
+        authHeader,
+        savedReport.id,
+        language,
+      );
+    }
+
     return new Response(
       JSON.stringify({
         success: true,
@@ -709,6 +777,8 @@ serve(async (req) => {
         cached: false,
         report: reportContent,
         generated_at: new Date().toISOString(),
+        email_queued: emailQueued,
+        email: user.email ?? null,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );

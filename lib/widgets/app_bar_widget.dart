@@ -86,7 +86,7 @@ class AppBarWidget extends StatelessWidget implements PreferredSizeWidget {
                         child: ClipRRect(
                           borderRadius: BorderRadius.circular(7),
                           child: Image.asset(
-                            'assets/images/ChatGPT_Image_Aug_10__2026__12_57_14_AM-1786333327390.png',
+                            'assets/images/hastveda_logo.png',
                             fit: BoxFit.contain,
                           ),
                         ),

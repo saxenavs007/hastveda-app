@@ -16,6 +16,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../routes/app_routes.dart';
 import '../../services/analytics_service.dart';
 import '../../services/app_strings.dart';
 import '../../services/connectivity_service.dart';
@@ -270,6 +271,8 @@ class _DetailedReportScreenState extends State<DetailedReportScreen> {
       }
 
       if (mounted) {
+        final emailQueued = result['email_queued'] == true;
+        final emailedTo = result['email'] as String? ?? '';
         setState(() {
           _reportData = report;
           _reportId = result['report_id'] as String?;
@@ -279,6 +282,22 @@ class _DetailedReportScreenState extends State<DetailedReportScreen> {
           _reportGenerated = true;
           _isGenerating = false;
         });
+
+        if (emailQueued) {
+          final message = _isHindi
+              ? 'आपकी विस्तृत रिपोर्ट ${emailedTo.isNotEmpty ? emailedTo : 'आपके पंजीकृत ईमेल'} पर भेजी जा रही है।'
+              : 'Your detailed report is being sent to ${emailedTo.isNotEmpty ? emailedTo : 'your registered email'}.';
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (!mounted) return;
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(message),
+                behavior: SnackBarBehavior.floating,
+                duration: const Duration(seconds: 4),
+              ),
+            );
+          });
+        }
 
         // Trigger review prompt after successful report generation
         if (mounted) {
@@ -382,7 +401,7 @@ class _EntitlementGateScreen extends StatelessWidget {
         ),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios_new_rounded),
-          onPressed: () => context.pop(),
+          onPressed: popOrHome,
         ),
         elevation: 0,
       ),
@@ -446,7 +465,7 @@ class _ReportGeneratorScreen extends StatelessWidget {
         ),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios_new_rounded),
-          onPressed: () => context.pop(),
+          onPressed: popOrHome,
         ),
         elevation: 0,
       ),
@@ -1168,7 +1187,7 @@ class _ReportViewerScreenState extends State<_ReportViewerScreen> {
         ),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios_new_rounded),
-          onPressed: () => context.pop(),
+          onPressed: popOrHome,
         ),
         elevation: 0,
       ),

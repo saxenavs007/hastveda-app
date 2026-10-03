@@ -11,11 +11,11 @@ class AppTheme {
   static const Color surfaceElevated = Color(0xFF1A1A26);
   static const Color outlineDark = Color(0xFF2A2A3A);
 
-  // ── Brand Core (Light) ───────────────────────────────────────────────────
-  static const Color backgroundLight = Color(0xFFF5F2FF);
-  static const Color surfaceLight = Color(0xFFFFFFFF);
-  static const Color surfaceElevatedLight = Color(0xFFF0ECFF);
-  static const Color outlineLight = Color(0xFFDDD8F0);
+  // ── Brand Core (Light) — Confetti: cream, saffron, festive warmth ────────
+  static const Color backgroundLight = Color(0xFFFFF6E8);
+  static const Color surfaceLight = Color(0xFFFFFDF8);
+  static const Color surfaceElevatedLight = Color(0xFFFFF1D4);
+  static const Color outlineLight = Color(0xFFE8D3B0);
 
   // ── Gold Accent (Premium / Highlight) ───────────────────────────────────
   static const Color gold = Color(0xFFD4A843);
@@ -28,11 +28,17 @@ class AppTheme {
   static const Color cyanMuted = Color(0xFF001E24);
   static const Color cyanMutedLight = Color(0xFFE0FAFF);
 
-  // ── Deep Purple Brand ────────────────────────────────────────────────────
+  // ── Deep Purple Brand (dark-mode tertiary only) ──────────────────────────
   static const Color deepPurple = Color(0xFF6B4FBB);
-  static const Color deepPurpleDark = Color(0xFF4A3490);
   static const Color purpleMuted = Color(0xFF1E1530);
-  static const Color purpleMutedLight = Color(0xFFEDE8FF);
+
+  // ── Confetti (light mode) ────────────────────────────────────────────────
+  // Saffron, marigold, coral, and maroon on a cream ground — festive, Vedic.
+  static const Color confetti = Color(0xFFC2410C);
+  static const Color confettiDeep = Color(0xFF8C2F39);
+  static const Color confettiMarigold = Color(0xFFE6A23C);
+  static const Color confettiCoral = Color(0xFFD4526E);
+  static const Color purpleMutedLight = Color(0xFFFFE8C2);
 
   // ── Primary / Secondary ─────────────────────────────────────────────────
   static const Color primary = gold;
@@ -48,9 +54,9 @@ class AppTheme {
   static const Color textMuted = Color(0xFF5A5870);
 
   // ── Text (Light) ─────────────────────────────────────────────────────────
-  static const Color textPrimaryLight = Color(0xFF1A1030);
-  static const Color textSecondaryLight = Color(0xFF5A4E7A);
-  static const Color textMutedLight = Color(0xFF9A90B8);
+  static const Color textPrimaryLight = Color(0xFF3A2418);
+  static const Color textSecondaryLight = Color(0xFF7A5340);
+  static const Color textMutedLight = Color(0xFFA8846A);
 
   // ── Semantic ─────────────────────────────────────────────────────────────
   static const Color success = Color(0xFF2ECC8A);
@@ -87,13 +93,13 @@ class AppTheme {
   );
 
   static const LinearGradient lightSurfaceGradient = LinearGradient(
-    colors: [Color(0xFFFFFFFF), Color(0xFFF0ECFF)],
+    colors: [Color(0xFFFFFDF8), Color(0xFFFFF1D4)],
     begin: Alignment.topCenter,
     end: Alignment.bottomCenter,
   );
 
   static const LinearGradient purpleGradientLight = LinearGradient(
-    colors: [Color(0xFF6B4FBB), Color(0xFF4A3490)],
+    colors: [Color(0xFFC2410C), Color(0xFFD4526E), Color(0xFF8C2F39)],
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
   );
@@ -267,10 +273,10 @@ class AppTheme {
       useMaterial3: true,
       brightness: Brightness.light,
       colorScheme: const ColorScheme.light(
-        primary: deepPurple,
+        primary: confetti,
         onPrimary: Colors.white,
         primaryContainer: purpleMutedLight,
-        onPrimaryContainer: deepPurpleDark,
+        onPrimaryContainer: confettiDeep,
         secondary: gold,
         onSecondary: Colors.white,
         secondaryContainer: goldMutedLight,
@@ -284,7 +290,7 @@ class AppTheme {
         error: error,
         onError: Colors.white,
         outline: outlineLight,
-        outlineVariant: Color(0xFFEDE8FF),
+        outlineVariant: Color(0xFFF3E0C0),
       ),
       scaffoldBackgroundColor: backgroundLight,
       textTheme: _buildTextTheme(
@@ -307,7 +313,7 @@ class AppTheme {
       cardTheme: CardThemeData(
         color: surfaceLight,
         elevation: 0,
-        shadowColor: const Color(0x1A6B4FBB),
+        shadowColor: const Color(0x1AC2410C),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(16),
           side: const BorderSide(color: outlineLight, width: 1),
@@ -336,7 +342,7 @@ class AppTheme {
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: deepPurple, width: 2),
+          borderSide: const BorderSide(color: confetti, width: 2),
         ),
         errorBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
@@ -347,7 +353,7 @@ class AppTheme {
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
-          backgroundColor: deepPurple,
+          backgroundColor: confetti,
           foregroundColor: Colors.white,
           elevation: 0,
           shape: RoundedRectangleBorder(
@@ -362,8 +368,8 @@ class AppTheme {
       ),
       outlinedButtonTheme: OutlinedButtonThemeData(
         style: OutlinedButton.styleFrom(
-          foregroundColor: deepPurple,
-          side: const BorderSide(color: deepPurple),
+          foregroundColor: confetti,
+          side: const BorderSide(color: confetti),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
           ),
@@ -376,7 +382,7 @@ class AppTheme {
       ),
       textButtonTheme: TextButtonThemeData(
         style: TextButton.styleFrom(
-          foregroundColor: deepPurple,
+          foregroundColor: confetti,
           textStyle: GoogleFonts.outfit(
             fontSize: 14,
             fontWeight: FontWeight.w600,
@@ -386,7 +392,7 @@ class AppTheme {
       dividerTheme: const DividerThemeData(color: outlineLight, thickness: 1),
       bottomNavigationBarTheme: const BottomNavigationBarThemeData(
         backgroundColor: surfaceLight,
-        selectedItemColor: deepPurple,
+        selectedItemColor: confetti,
         unselectedItemColor: textMutedLight,
         elevation: 0,
         type: BottomNavigationBarType.fixed,
@@ -399,7 +405,7 @@ class AppTheme {
             return GoogleFonts.outfit(
               fontSize: 11,
               fontWeight: FontWeight.w600,
-              color: deepPurple,
+              color: confetti,
             );
           }
           return GoogleFonts.outfit(
@@ -410,14 +416,14 @@ class AppTheme {
         }),
         iconTheme: WidgetStateProperty.resolveWith((states) {
           if (states.contains(WidgetState.selected)) {
-            return const IconThemeData(color: deepPurple, size: 22);
+            return const IconThemeData(color: confetti, size: 22);
           }
           return const IconThemeData(color: textMutedLight, size: 22);
         }),
       ),
       switchTheme: SwitchThemeData(
         thumbColor: WidgetStateProperty.resolveWith((states) {
-          if (states.contains(WidgetState.selected)) return deepPurple;
+          if (states.contains(WidgetState.selected)) return confetti;
           return textMutedLight;
         }),
         trackColor: WidgetStateProperty.resolveWith((states) {
@@ -558,7 +564,7 @@ class AppTheme {
   }
 
   static Color primaryBrandColor(BuildContext context) {
-    return Theme.of(context).brightness == Brightness.dark ? gold : deepPurple;
+    return Theme.of(context).brightness == Brightness.dark ? gold : confetti;
   }
 
   static Color goldMutedColor(BuildContext context) {

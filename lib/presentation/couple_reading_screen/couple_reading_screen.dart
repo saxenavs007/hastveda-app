@@ -480,7 +480,7 @@ class _CoupleReadingScreenState extends State<CoupleReadingScreen>
           ),
           leading: IconButton(
             icon: const Icon(Icons.arrow_back_ios_new_rounded),
-            onPressed: () => context.pop(),
+            onPressed: popOrHome,
           ),
         ),
         body: Padding(
@@ -516,7 +516,7 @@ class _CoupleReadingScreenState extends State<CoupleReadingScreen>
         ),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios_new_rounded),
-          onPressed: () => context.pop(),
+          onPressed: popOrHome,
         ),
         bottom: TabBar(
           controller: _tabController,

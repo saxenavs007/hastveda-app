@@ -255,7 +255,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final textSec = isDark
         ? AppTheme.textSecondary
         : AppTheme.textSecondaryLight;
-    final primaryColor = isDark ? AppTheme.gold : AppTheme.deepPurple;
+    final primaryColor = isDark ? AppTheme.gold : AppTheme.confetti;
     final cardBg = isDark ? AppTheme.surfaceElevated : AppTheme.surfaceLight;
     final cardBorder = isDark ? AppTheme.outlineDark : AppTheme.outlineLight;
     final divider = isDark ? AppTheme.outlineDark : AppTheme.outlineLight;
@@ -755,6 +755,28 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
+  String _questionCreditLine(bool isPremium) {
+    final isHindi = context.read<LocaleProvider>().languageCode == 'hi';
+    final paid = (_profile?['paid_question_balance'] as num?)?.toInt() ?? 0;
+    final period = _profile?['free_question_period']?.toString() ?? '';
+    final storedUsed = (_profile?['free_questions_used'] as num?)?.toInt() ?? 0;
+    final shifted = DateTime.now().toUtc().add(
+      const Duration(hours: 5, minutes: 30),
+    );
+    final monthKey =
+        '${shifted.year.toString().padLeft(4, '0')}-${shifted.month.toString().padLeft(2, '0')}';
+    final used = period.startsWith(monthKey) ? storedUsed : 0;
+    final freeLeft = isPremium ? (2 - used).clamp(0, 2) : 0;
+    if (isPremium) {
+      return isHindi
+          ? 'इस महीने $freeLeft मुफ़्त प्रश्न शेष · भुगतान क्रेडिट: $paid'
+          : '$freeLeft of 2 free questions left this month · $paid paid credit${paid == 1 ? '' : 's'}';
+    }
+    return isHindi
+        ? '₹59 प्रति प्रश्न · भुगतान क्रेडिट: $paid'
+        : '₹59 per question · $paid paid credit${paid == 1 ? '' : 's'}';
+  }
+
   Widget _buildSubscriptionCard({
     required bool isDark,
     required Color cardBg,
@@ -814,6 +836,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
               color: isPremium ? AppTheme.gold : textPri,
             ),
           ),
+          const SizedBox(height: 6),
+          Text(
+            _questionCreditLine(isPremium),
+            style: GoogleFonts.outfit(fontSize: 13, color: textSec, height: 1.35),
+          ),
           if (isPremium && status != null) ...[
             const SizedBox(height: 6),
             Text(
@@ -863,7 +890,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ),
                 ),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: isDark ? AppTheme.gold : AppTheme.deepPurple,
+                  backgroundColor: isDark ? AppTheme.gold : AppTheme.confetti,
                   foregroundColor: Colors.white,
                   padding: const EdgeInsets.symmetric(vertical: 12),
                   shape: RoundedRectangleBorder(

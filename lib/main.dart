@@ -16,6 +16,7 @@ import './services/connectivity_service.dart';
 import './services/entitlement_notifier.dart';
 import './services/error_logger.dart';
 import './services/fcm_service.dart';
+import './services/local_notification_service.dart';
 import './services/locale_provider.dart';
 import './services/notification_preferences_service.dart';
 import './services/supabase_service.dart';
@@ -56,6 +57,8 @@ void main() async {
   bool supabaseReady = false;
   String? supabaseError;
 
+  await SupabaseConfig.loadFromEnvFile();
+
   if (!SupabaseConfig.isConfigured) {
     supabaseError =
         'Supabase credentials are missing (SUPABASE_URL / SUPABASE_ANON_KEY). '
@@ -85,6 +88,12 @@ void main() async {
     await FCMService.instance.initialize();
   } catch (e) {
     debugPrint('FCM init error: $e');
+  }
+
+  try {
+    await LocalNotificationService.instance.initialize();
+  } catch (e) {
+    debugPrint('Local notification init error: $e');
   }
 
   // Track app_opened event
@@ -191,7 +200,7 @@ class _SupabaseErrorApp extends StatelessWidget {
                   ClipRRect(
                     borderRadius: BorderRadius.circular(20),
                     child: Image.asset(
-                      'assets/images/ChatGPT_Image_Aug_10__2026__12_57_14_AM-1786333327390.png',
+                      'assets/images/hastveda_logo.png',
                       width: 80,
                       height: 80,
                       fit: BoxFit.contain,

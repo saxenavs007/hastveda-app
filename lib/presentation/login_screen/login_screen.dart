@@ -188,7 +188,7 @@ class _LoginScreenState extends State<LoginScreen>
         ? AppTheme.textSecondary
         : AppTheme.textSecondaryLight;
     final textMut = isDark ? AppTheme.textMuted : AppTheme.textMutedLight;
-    final primaryColor = isDark ? AppTheme.gold : AppTheme.deepPurple;
+    final primaryColor = isDark ? AppTheme.gold : AppTheme.confetti;
 
     return Scaffold(
       backgroundColor: bg,
@@ -262,7 +262,7 @@ class _LoginScreenState extends State<LoginScreen>
                                 ? Icons.dark_mode_rounded
                                 : Icons.light_mode_rounded,
                             size: 16,
-                            color: isDark ? AppTheme.gold : AppTheme.deepPurple,
+                            color: isDark ? AppTheme.gold : AppTheme.confetti,
                           ),
                           const SizedBox(width: 6),
                           Text(
@@ -288,7 +288,7 @@ class _LoginScreenState extends State<LoginScreen>
                   borderRadius: BorderRadius.circular(18),
                   boxShadow: [
                     BoxShadow(
-                      color: (isDark ? AppTheme.gold : AppTheme.deepPurple)
+                      color: (isDark ? AppTheme.gold : AppTheme.confetti)
                           .withAlpha(80),
                       blurRadius: 30,
                       spreadRadius: 4,
@@ -298,7 +298,7 @@ class _LoginScreenState extends State<LoginScreen>
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(18),
                   child: Image.asset(
-                    'assets/images/ChatGPT_Image_Aug_10__2026__12_57_14_AM-1786333327390.png',
+                    'assets/images/hastveda_logo.png',
                     fit: BoxFit.contain,
                   ),
                 ),
@@ -541,7 +541,7 @@ class _ThemedTextField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final focusBorder = isDark ? AppTheme.gold : AppTheme.deepPurple;
+    final focusBorder = isDark ? AppTheme.gold : AppTheme.confetti;
     return TextField(
       controller: controller,
       obscureText: obscureText,

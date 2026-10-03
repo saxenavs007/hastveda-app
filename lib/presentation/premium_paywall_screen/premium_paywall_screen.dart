@@ -105,7 +105,10 @@ class _PremiumPaywallScreenState extends State<PremiumPaywallScreen>
       return;
     }
 
-    if (kIsWeb) {
+    if (kIsWeb ||
+        defaultTargetPlatform == TargetPlatform.windows ||
+        defaultTargetPlatform == TargetPlatform.linux ||
+        defaultTargetPlatform == TargetPlatform.macOS) {
       _showWebNotSupported();
       return;
     }

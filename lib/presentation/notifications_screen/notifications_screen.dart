@@ -4,7 +4,9 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../routes/app_routes.dart';
 import '../../services/app_strings.dart';
+import '../../services/engagement_alerts_service.dart';
 import '../../services/locale_provider.dart';
 import '../../services/theme_provider.dart';
 import '../../theme/app_theme.dart';
@@ -18,49 +20,58 @@ class NotificationsScreen extends StatefulWidget {
 
 class _NotificationsScreenState extends State<NotificationsScreen> {
   bool _isLoading = true;
+  List<EngagementAlert> _alerts = [];
   List<Map<String, dynamic>> _notifications = [];
 
   @override
   void initState() {
     super.initState();
-    _loadNotifications();
+    _load();
   }
 
-  Future<void> _loadNotifications() async {
+  Future<void> _load() async {
     setState(() => _isLoading = true);
+    final alerts = await EngagementAlertsService.instance.todaysAlerts();
+    List<Map<String, dynamic>> stored = [];
     try {
       final userId = Supabase.instance.client.auth.currentUser?.id;
-      if (userId == null) {
-        setState(() => _isLoading = false);
-        return;
+      if (userId != null) {
+        final data = await Supabase.instance.client
+            .from('notifications')
+            .select()
+            .eq('user_id', userId)
+            .order('created_at', ascending: false)
+            .limit(30);
+        stored = List<Map<String, dynamic>>.from(data);
       }
-      final data = await Supabase.instance.client
-          .from('notifications')
-          .select()
-          .eq('user_id', userId)
-          .order('created_at', ascending: false)
-          .limit(50);
-      if (mounted) {
-        setState(() {
-          _notifications = List<Map<String, dynamic>>.from(data);
-          _isLoading = false;
-        });
-      }
-    } catch (_) {
-      if (mounted) setState(() => _isLoading = false);
-    }
+    } catch (_) {}
+    if (!mounted) return;
+    setState(() {
+      _alerts = alerts;
+      _notifications = stored;
+      _isLoading = false;
+    });
   }
 
-  Future<void> _markAllRead() async {
-    try {
-      final userId = Supabase.instance.client.auth.currentUser?.id;
-      if (userId == null) return;
-      await Supabase.instance.client
-          .from('notifications')
-          .update({'is_read': true})
-          .eq('user_id', userId);
-      await _loadNotifications();
-    } catch (_) {}
+  Future<void> _onAlertTap(EngagementAlert alert) async {
+    final signedIn = Supabase.instance.client.auth.currentUser != null;
+    if (!signedIn) {
+      context.push(AppRoutes.login);
+      return;
+    }
+    if (!alert.personalized && alert.body.startsWith('Scan your palm')) {
+      context.go(AppRoutes.palmScanScreen);
+      return;
+    }
+    final uri = Uri(
+      path: AppRoutes.insightPreview,
+      queryParameters: {
+        'title': alert.title,
+        'teaser': alert.teaser,
+        'question': alert.question,
+      },
+    );
+    context.push(uri.toString());
   }
 
   @override
@@ -69,6 +80,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     final themeProvider = context.watch<ThemeProvider>();
     final s = AppStrings.of(localeProvider.languageCode);
     final isDark = themeProvider.isDark;
+    final isHindi = localeProvider.languageCode == 'hi';
 
     final bg = isDark ? AppTheme.backgroundDark : AppTheme.backgroundLight;
     final surface = isDark ? AppTheme.surfaceDark : AppTheme.surfaceLight;
@@ -76,16 +88,20 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     final textSec = isDark
         ? AppTheme.textSecondary
         : AppTheme.textSecondaryLight;
-    final textMut = isDark ? AppTheme.textMuted : AppTheme.textMutedLight;
-    final primaryColor = isDark ? AppTheme.gold : AppTheme.deepPurple;
-    final cardBg = isDark ? AppTheme.surfaceElevated : AppTheme.surfaceLight;
-    final cardBorder = isDark ? AppTheme.outlineDark : AppTheme.outlineLight;
+    final primaryColor = isDark ? AppTheme.gold : AppTheme.confetti;
 
     return Scaffold(
       backgroundColor: bg,
       appBar: AppBar(
         backgroundColor: surface,
         foregroundColor: textPri,
+        automaticallyImplyLeading: false,
+        leading: context.canPop()
+            ? IconButton(
+                icon: Icon(Icons.arrow_back_ios_new_rounded, color: textPri),
+                onPressed: () => context.pop(),
+              )
+            : null,
         title: Text(
           s.notificationsTitle,
           style: GoogleFonts.outfit(
@@ -93,145 +109,152 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
             color: textPri,
           ),
         ),
-        leading: IconButton(
-          icon: Icon(Icons.arrow_back_ios_new_rounded, color: textPri),
-          onPressed: () => context.pop(),
-        ),
-        actions: [
-          if (_notifications.any((n) => n['is_read'] == false))
-            TextButton(
-              onPressed: _markAllRead,
-              child: Text(
-                'Mark all read',
-                style: GoogleFonts.outfit(fontSize: 12, color: primaryColor),
-              ),
-            ),
-        ],
       ),
       body: _isLoading
           ? Center(child: CircularProgressIndicator(color: primaryColor))
-          : _notifications.isEmpty
-          ? Center(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
+          : RefreshIndicator(
+              onRefresh: _load,
+              color: primaryColor,
+              child: ListView(
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 110),
                 children: [
-                  Icon(
-                    Icons.notifications_none_rounded,
-                    size: 64,
-                    color: textMut,
-                  ),
-                  const SizedBox(height: 16),
                   Text(
-                    s.noNotifications,
+                    isHindi ? 'आज के संकेत' : 'Today’s alerts',
                     style: GoogleFonts.outfit(
-                      fontSize: 18,
+                      fontSize: 16,
                       fontWeight: FontWeight.w700,
                       color: textPri,
                     ),
                   ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 4),
                   Text(
-                    'Your palm reading updates\nwill appear here.',
-                    textAlign: TextAlign.center,
-                    style: GoogleFonts.outfit(
-                      fontSize: 14,
-                      color: textSec,
-                      height: 1.5,
-                    ),
+                    isHindi
+                        ? 'ये कार्ड हर दिन बदलते हैं और आपके सहेजे स्कैन पर आधारित हैं।'
+                        : 'These cards refresh daily and follow your saved palm scan.',
+                    style: GoogleFonts.outfit(fontSize: 12, color: textSec),
                   ),
-                ],
-              ),
-            )
-          : RefreshIndicator(
-              onRefresh: _loadNotifications,
-              color: primaryColor,
-              child: ListView.separated(
-                padding: const EdgeInsets.all(16),
-                itemCount: _notifications.length,
-                separatorBuilder: (_, __) => const SizedBox(height: 8),
-                itemBuilder: (context, index) {
-                  final n = _notifications[index];
-                  final isRead = n['is_read'] as bool? ?? false;
-                  final createdAt = n['created_at'] != null
-                      ? DateTime.tryParse(n['created_at'] as String)
-                      : null;
-                  return Container(
-                    padding: const EdgeInsets.all(14),
-                    decoration: BoxDecoration(
-                      color: isRead
-                          ? cardBg
-                          : primaryColor.withAlpha(isDark ? 20 : 15),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                        color: isRead ? cardBorder : primaryColor.withAlpha(60),
+                  const SizedBox(height: 12),
+                  ..._alerts.map(
+                    (alert) => Padding(
+                      padding: const EdgeInsets.only(bottom: 10),
+                      child: _AlertCard(
+                        alert: alert,
+                        primary: primaryColor,
+                        textPri: textPri,
+                        textSec: textSec,
+                        isDark: isDark,
+                        isHindi: isHindi,
+                        onTap: () => _onAlertTap(alert),
                       ),
                     ),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Container(
-                          width: 36,
-                          height: 36,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: primaryColor.withAlpha(20),
-                          ),
-                          child: Icon(
-                            Icons.notifications_rounded,
-                            color: primaryColor,
-                            size: 18,
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                n['title'] as String? ?? 'HastVeda',
-                                style: GoogleFonts.outfit(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w600,
-                                  color: textPri,
-                                ),
-                              ),
-                              const SizedBox(height: 3),
-                              Text(
-                                n['body'] as String? ?? '',
-                                style: GoogleFonts.outfit(
-                                  fontSize: 13,
-                                  color: textSec,
-                                  height: 1.4,
-                                ),
-                              ),
-                              if (createdAt != null) ...[
-                                const SizedBox(height: 4),
-                                Text(
-                                  '${createdAt.day}/${createdAt.month}/${createdAt.year}',
-                                  style: GoogleFonts.outfit(
-                                    fontSize: 11,
-                                    color: textMut,
-                                  ),
-                                ),
-                              ],
-                            ],
-                          ),
-                        ),
-                        if (!isRead)
-                          Container(
-                            width: 8,
-                            height: 8,
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              color: primaryColor,
-                            ),
-                          ),
-                      ],
+                  ),
+                  if (_notifications.isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      isHindi ? 'खाता सूचनाएं' : 'Account notices',
+                      style: GoogleFonts.outfit(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                        color: textPri,
+                      ),
                     ),
-                  );
-                },
+                    const SizedBox(height: 8),
+                    ..._notifications.map(
+                      (n) => Padding(
+                        padding: const EdgeInsets.only(bottom: 8),
+                        child: Text(
+                          '${n['title'] ?? 'HastVeda'}\n${n['body'] ?? ''}',
+                          style: GoogleFonts.outfit(
+                            fontSize: 13,
+                            color: textSec,
+                            height: 1.4,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
               ),
             ),
+    );
+  }
+}
+
+class _AlertCard extends StatelessWidget {
+  final EngagementAlert alert;
+  final Color primary;
+  final Color textPri;
+  final Color textSec;
+  final bool isDark;
+  final bool isHindi;
+  final VoidCallback onTap;
+
+  const _AlertCard({
+    required this.alert,
+    required this.primary,
+    required this.textPri,
+    required this.textSec,
+    required this.isDark,
+    required this.isHindi,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: isDark ? AppTheme.surfaceElevated : AppTheme.surfaceLight,
+      borderRadius: BorderRadius.circular(16),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: primary.withAlpha(70)),
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(alert.icon, color: primary),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      alert.title,
+                      style: GoogleFonts.outfit(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
+                        color: textPri,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      alert.body,
+                      style: GoogleFonts.outfit(
+                        fontSize: 12,
+                        height: 1.4,
+                        color: textSec,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      isHindi ? 'और जानें' : 'Know more',
+                      style: GoogleFonts.outfit(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        color: primary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

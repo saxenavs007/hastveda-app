@@ -489,9 +489,7 @@ class _RemediesScreenState extends State<RemediesScreen> {
         ),
         leading: IconButton(
           icon: Icon(Icons.arrow_back_ios_new_rounded, color: textPri),
-          onPressed: () => context.canPop()
-              ? context.pop()
-              : context.go(AppRoutes.homeScreen),
+          onPressed: popOrHome,
         ),
       ),
       body: _isCheckingAccess

@@ -4,7 +4,8 @@
 //
 // Security guarantees:
 // 1. Verifies question belongs to authenticated user (or uses service-role for internal calls)
-// 2. Verifies question is legitimately free (≤2 per Premium user) OR has a paid ₹50 order
+// 2. Verifies a free question is within Premium's 2 per IST month, OR has its own paid ₹50 + GST order
+//    Paid questions have no monthly cap: each successful Cashfree order answers one question.
 // 3. Prevents double-processing (idempotent)
 // 4. Never allows unpaid ₹50 questions to be answered
 // 5. Handles AI failure safely — records failed status without losing the question
@@ -25,7 +26,17 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type",
 };
 
-const FREE_QUESTION_LIMIT = 2;
+const FREE_QUESTIONS_PER_MONTH = 2;
+
+function istMonthStartIso(): string {
+  const shifted = new Date(Date.now() + 330 * 60 * 1000);
+  const monthStartUtc = Date.UTC(
+    shifted.getUTCFullYear(),
+    shifted.getUTCMonth(),
+    1,
+  );
+  return new Date(monthStartUtc - 330 * 60 * 1000).toISOString();
+}
 
 // ── HastVeda AI system prompt ─────────────────────────────────────────────────
 const HASTVEDA_SYSTEM_PROMPT = `You are HastVeda, an ancient and wise palm reading oracle deeply rooted in Indian Vedic tradition and palmistry. You have profound knowledge of:
@@ -200,16 +211,17 @@ async function processQuestion(
       .from("question_usage")
       .select("id", { count: "exact", head: true })
       .eq("user_id", userId)
-      .eq("is_free", true);
+      .eq("is_free", true)
+      .gte("created_at", istMonthStartIso());
 
-    if ((freeCount ?? 0) > FREE_QUESTION_LIMIT) {
+    if ((freeCount ?? 0) > FREE_QUESTIONS_PER_MONTH) {
       await supabase
         .from("question_usage")
         .update({ status: "rejected_free_quota_exceeded", updated_at: new Date().toISOString() })
         .eq("id", questionUsageId);
 
       return new Response(
-        JSON.stringify({ error: "Free question quota exceeded. Please pay ₹50 for additional questions." }),
+        JSON.stringify({ error: "Free question quota exceeded. Premium includes 2 free questions each month. Additional questions cost ₹50 + GST." }),
         { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -282,6 +294,13 @@ async function processQuestion(
         JSON.stringify({ error: "This payment has already been used for a question." }),
         { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
+    }
+
+    const { error: consumeError } = await supabase.rpc("consume_paid_question_credit", {
+      p_question_id: questionUsageId,
+    });
+    if (consumeError) {
+      console.error("[answer-hastveda-question] paid credit consume failed", consumeError);
     }
   }
 

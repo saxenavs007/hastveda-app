@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 
@@ -18,7 +19,8 @@ import './widgets/weekly_predictions_widget.dart';
 import './widgets/yearly_predictions_widget.dart';
 
 class PredictionsScreen extends StatefulWidget {
-  const PredictionsScreen({super.key});
+  final String? initialTab;
+  const PredictionsScreen({super.key, this.initialTab});
 
   @override
   State<PredictionsScreen> createState() => _PredictionsScreenState();
@@ -33,7 +35,7 @@ class _PredictionsScreenState extends State<PredictionsScreen>
   bool? _isPremium;
 
   static const List<String> _tabLabels = [
-    'Today',
+    'Daily',
     'Weekly',
     'Monthly',
     'Yearly',
@@ -51,7 +53,11 @@ class _PredictionsScreenState extends State<PredictionsScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 5, vsync: this);
+    _tabController = TabController(
+      length: 5,
+      vsync: this,
+      initialIndex: _indexFor(widget.initialTab),
+    );
     _tabController.addListener(() {
       if (!_tabController.indexIsChanging) {
         setState(() => _currentTab = _tabController.index);
@@ -85,6 +91,13 @@ class _PredictionsScreenState extends State<PredictionsScreen>
     if (context.watch<EntitlementNotifier>().isPremium && _isPremium != true) {
       _isPremium = true;
     }
+    final tab = GoRouterState.of(context).uri.queryParameters['tab'];
+    if (tab == null) return;
+    final index = _indexFor(tab);
+    if (_tabController.index != index) {
+      _tabController.index = index;
+      _currentTab = index;
+    }
   }
 
   Future<void> _checkPremium() async {
@@ -102,7 +115,13 @@ class _PredictionsScreenState extends State<PredictionsScreen>
     super.dispose();
   }
 
-  /// Weekly / Monthly / Yearly are "Deep Future & Predictions" — Premium.
+  int _indexFor(String? tab) {
+    if (tab == 'weekly') return 1;
+    if (tab == 'monthly') return 2;
+    if (tab == 'yearly') return 3;
+    if (tab == 'past') return 4;
+    return 0;
+  }
   /// Today's Insight stays free and is never wrapped.
   Widget _deepPredictions(Widget child) => EntitlementGate(
     feature: PremiumFeatures.deepPredictions,
@@ -268,7 +287,7 @@ class _PredictionsScreenState extends State<PredictionsScreen>
               const SizedBox(width: 8),
               if (!compact)
                 Text(
-                  'Palm Predictions',
+                  'Horoscope & Insights',
                   style: GoogleFonts.outfit(
                     fontSize: 18,
                     fontWeight: FontWeight.w700,

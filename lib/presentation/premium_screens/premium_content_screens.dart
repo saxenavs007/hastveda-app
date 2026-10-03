@@ -194,7 +194,7 @@ class _PremiumContentScreenState extends State<_PremiumContentScreen> {
         ),
         leading: IconButton(
           icon: Icon(Icons.arrow_back_ios_new_rounded, color: textPri),
-          onPressed: () => context.pop(),
+          onPressed: popOrHome,
         ),
       ),
       body: _isCheckingEntitlement
@@ -672,13 +672,7 @@ class _PersonalityScreenState extends State<PersonalityScreen> {
         ),
         leading: IconButton(
           icon: Icon(Icons.arrow_back_ios_new_rounded, color: textPri),
-          onPressed: () {
-            if (context.canPop()) {
-              context.pop();
-            } else {
-              context.go(AppRoutes.homeScreen);
-            }
-          },
+          onPressed: popOrHome,
         ),
       ),
       body: _isLoading
@@ -948,13 +942,7 @@ class _LoveRelationshipsScreenState extends State<LoveRelationshipsScreen> {
         ),
         leading: IconButton(
           icon: Icon(Icons.arrow_back_ios_new_rounded, color: textPri),
-          onPressed: () {
-            if (context.canPop()) {
-              context.pop();
-            } else {
-              context.go(AppRoutes.homeScreen);
-            }
-          },
+          onPressed: popOrHome,
         ),
       ),
       body: _isLoading

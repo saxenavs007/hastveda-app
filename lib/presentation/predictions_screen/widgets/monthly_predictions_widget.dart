@@ -249,7 +249,7 @@ class _MonthlyPredictionsWidgetState extends State<MonthlyPredictionsWidget> {
                 barGroups: [
                   _barGroup(0, scores[0], AppTheme.gold),
                   _barGroup(1, scores[1], AppTheme.success),
-                  _barGroup(2, scores[2], AppTheme.deepPurple),
+                  _barGroup(2, scores[2], AppTheme.confetti),
                   _barGroup(3, scores[3], AppTheme.error),
                   _barGroup(4, scores[4], AppTheme.cyan),
                 ],

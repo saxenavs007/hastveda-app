@@ -3,9 +3,9 @@
 // All content is AI-generated from actual palm feature analysis — no mock values.
 
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import '../../routes/app_routes.dart';
 import '../../services/pdf_export_service.dart';
 import '../../theme/app_theme.dart';
 
@@ -135,7 +135,7 @@ class _CoupleReadingResultScreenState extends State<CoupleReadingResultScreen> {
                 Icons.arrow_back_ios_new_rounded,
                 color: Colors.white,
               ),
-              onPressed: () => context.pop(),
+              onPressed: popOrHome,
             ),
             actions: [
               IconButton(

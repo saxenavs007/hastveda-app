@@ -195,7 +195,7 @@ class _ReadingSelectionScreenState extends State<ReadingSelectionScreen> {
         ),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios_new_rounded),
-          onPressed: () => context.pop(),
+          onPressed: popOrHome,
         ),
       ),
       body: _isLoading
@@ -984,7 +984,7 @@ Remember: compare only the stored data above. Do not invent new analysis.''';
         ),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios_new_rounded),
-          onPressed: () => context.pop(),
+          onPressed: popOrHome,
         ),
       ),
       body: _isLoading

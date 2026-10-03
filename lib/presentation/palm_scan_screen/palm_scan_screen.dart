@@ -8,6 +8,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:provider/provider.dart';
+import 'package:wakelock_plus/wakelock_plus.dart';
 
 import '../../routes/app_routes.dart';
 import '../../services/analytics_service.dart';
@@ -18,7 +19,6 @@ import '../../services/locale_provider.dart';
 import '../../services/palm_analysis_service.dart';
 import '../../services/palm_failure_logger.dart';
 import '../../services/palm_failure_reason.dart';
-import '../../services/screen_wake_service.dart';
 import './widgets/palm_guide_overlay_widget.dart';
 
 // ── Scan flow states ──────────────────────────────────────────────────────────
@@ -75,10 +75,14 @@ class _PalmScanScreenState extends State<PalmScanScreen>
   late AnimationController _successController;
   late Animation<double> _successAnim;
 
+  /// True while this screen is holding the display awake.
+  bool _screenWakeEnabled = false;
+
   @override
   void initState() {
     super.initState();
     analytics.track(HastVedaEvents.palmScanStarted);
+    _enableScreenWake();
 
     _scanLineController = AnimationController(
       vsync: this,
@@ -101,9 +105,7 @@ class _PalmScanScreenState extends State<PalmScanScreen>
   @override
   void dispose() {
     _stageTimer?.cancel();
-    // Covers "user leaves/cancels": popping back or being disposed mid-analysis
-    // hands the screen timeout straight back to the OS.
-    ScreenWakeService.instance.release(this);
+    _disableScreenWake();
     _scanLineController.dispose();
     _successController.dispose();
     _cameraController?.dispose();
@@ -112,35 +114,34 @@ class _PalmScanScreenState extends State<PalmScanScreen>
 
   // ── Screen-wake lock ──────────────────────────────────────────────────────
 
-  /// The stretches where the user is not touching the screen but must keep
-  /// watching it: lining a palm up in the live preview, the guided scan, and the
-  /// upload + AI reading generation. Everything else — hand selection, the
-  /// success card, errors — goes back to the normal system timeout.
-  bool get _needsScreenAwake =>
-      _flowState == _ScanFlowState.positioning ||
-      _flowState == _ScanFlowState.scanning ||
-      _flowState == _ScanFlowState.analyzing;
+  /// Keeps the display on for the whole palm-scan screen, including camera
+  /// setup. A missing platform implementation must not stop the scan.
+  Future<void> _enableScreenWake() async {
+    if (_screenWakeEnabled) return;
+    try {
+      await WakelockPlus.enable();
+      _screenWakeEnabled = true;
+    } catch (e) {
+      debugPrint('WakelockPlus.enable failed: $e');
+    }
+  }
 
-  /// Applies a flow-state transition and reconciles the wake lock with it, so
-  /// the lock is governed by one rule instead of a release call bolted onto each
-  /// of the flow's several exit branches.
+  /// Restores the normal screen timeout. Safe to call more than once.
+  Future<void> _disableScreenWake() async {
+    if (!_screenWakeEnabled) return;
+    _screenWakeEnabled = false;
+    try {
+      await WakelockPlus.disable();
+    } catch (e) {
+      debugPrint('WakelockPlus.disable failed: $e');
+    }
+  }
+
+  /// Applies a flow-state transition. The wake lock stays on until the scan
+  /// completes or this screen is disposed.
   void _setFlowState(VoidCallback mutation) {
-    final wake = ScreenWakeService.instance;
-
-    // The analysis continues after the user pops this screen, so a transition
-    // can still land once we are gone. Never re-acquire in that case — nothing
-    // would be left to release it and the screen would stay on for good.
-    if (!mounted) {
-      wake.release(this);
-      return;
-    }
-
+    if (!mounted) return;
     setState(mutation);
-    if (_needsScreenAwake) {
-      wake.acquire(this);
-    } else {
-      wake.release(this);
-    }
   }
 
   // ── Camera init ───────────────────────────────────────────────────────────
@@ -232,6 +233,7 @@ class _PalmScanScreenState extends State<PalmScanScreen>
   // ── Hand selection confirmed ──────────────────────────────────────────────
 
   Future<void> _onHandSelected(String hand) async {
+    await _enableScreenWake();
     _setFlowState(() {
       _handSide = hand;
       _flowState = _ScanFlowState.positioning;
@@ -333,7 +335,7 @@ class _PalmScanScreenState extends State<PalmScanScreen>
       final quota = await EntitlementService.instance.checkFreeTierLimit(
         'scans_per_month',
       );
-      if (quota.hasReachedLimit) {
+        if (quota.hasReachedLimit) {
         _stopStageProgressionTimer();
         _scanLineController.stop();
         if (mounted) {
@@ -342,7 +344,7 @@ class _PalmScanScreenState extends State<PalmScanScreen>
             _failureReason = PalmFailureReason.freeLimitReached;
             _failureDetail = null;
             _errorMessage = s.freeScanLimitReached(quota.limit ?? 2);
-            _showUpgradeAction = true;
+            _showUpgradeAction = !quota.isPremium;
           });
         }
         return;
@@ -431,9 +433,8 @@ class _PalmScanScreenState extends State<PalmScanScreen>
       );
 
       if (mounted) {
-        // Reading is generated — the wake lock is no longer needed for the
-        // success card or the results screen that follows.
         _setFlowState(() => _flowState = _ScanFlowState.complete);
+        await _disableScreenWake();
         _successController.forward();
 
         // Navigate after showing success for 1.5s.
@@ -468,7 +469,7 @@ class _PalmScanScreenState extends State<PalmScanScreen>
           _failureReason = PalmFailureReason.freeLimitReached;
           _failureDetail = null;
           _errorMessage = s2.freeScanLimitReached(e.limit);
-          _showUpgradeAction = true;
+          _showUpgradeAction = !e.isPremium;
         });
       }
     } on ImageQualityException catch (e) {
@@ -609,6 +610,8 @@ class _PalmScanScreenState extends State<PalmScanScreen>
       'daily_insight': result.dailyInsight(lang),
       'daily_insight_en': result.dailyInsightEn,
       'daily_insight_hi': result.dailyInsightHi,
+      'remedies_en': result.remediesEn,
+      'remedies_hi': result.remediesHi,
       'confidence_note': result.confidenceNote(lang),
       'confidence_note_en': result.confidenceNoteEn,
       'confidence_note_hi': result.confidenceNoteHi,
@@ -702,7 +705,7 @@ class _PalmScanScreenState extends State<PalmScanScreen>
           selectedHand: _handSide,
           isHindi: isHindi,
           onHandSelected: _onHandSelected,
-          onBack: () => context.pop(),
+          onBack: popOrHome,
         );
       case _ScanFlowState.positioning:
         return _PositioningView(
@@ -759,7 +762,7 @@ class _PalmScanScreenState extends State<PalmScanScreen>
           copy: copy,
           isCaptureProblem: _failureReason.isCaptureProblem,
           onRetry: _retryFromHandSelection,
-          onBack: () => context.pop(),
+          onBack: popOrHome,
           showUpgrade: _showUpgradeAction,
           onUpgrade: () => context.push(AppRoutes.premiumPaywall),
         );

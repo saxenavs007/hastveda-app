@@ -102,7 +102,7 @@ class _HastVedaFallbackScreen extends StatelessWidget {
                   child: ClipRRect(
                     borderRadius: BorderRadius.circular(16),
                     child: Image.asset(
-                      'assets/images/ChatGPT_Image_Aug_10__2026__12_57_14_AM-1786333327390.png',
+                      'assets/images/hastveda_logo.png',
                       fit: BoxFit.contain,
                     ),
                   ),
@@ -184,7 +184,7 @@ class _HastVedaFallbackScreen extends StatelessWidget {
                       ),
                     ),
                     style: OutlinedButton.styleFrom(
-                      foregroundColor: AppTheme.deepPurple,
+                      foregroundColor: AppTheme.confetti,
                       side: BorderSide(color: outline),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(12),

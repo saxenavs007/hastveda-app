@@ -36,6 +36,8 @@ dependencies:
   in_app_review: ^2.0.12     # Google Play in-app review mechanism
   speech_to_text: ^7.4.0     # Speech-to-text for microphone input in Ask HastVeda
   flutter_tts: ^4.2.5        # Text-to-speech for reading answers aloud in Ask HastVeda
+  flutter_local_notifications: ^19.4.0 # Daily horoscope pop-ups on the phone screen
+  timezone: ^0.10.1
 
   flutter_riverpod: any
   universal_html: ^2.2.4
@@ -49,9 +51,10 @@ flutter:
   assets:
     - assets/
     - assets/images/
-    - assets/images/hastveda_onboarding_1_palm_discovery.png
+    - env.json
+    - assets/images/hastveda_onboarding_1_cosmic_blueprint.png
     - assets/images/hastveda_onboarding_2_ai_analysis.png
-    - assets/images/hastveda_onboarding_3_golden_insights.png
+    - assets/images/hastveda_onboarding_3_daily_guidance.png
   # CRITICAL ASSET MANAGEMENT RULES:
   # - DO NOT ADD NEW ASSET DIRECTORIES (assets/svg/, assets/icons/, etc.)
   # - ONLY USE EXISTING AND ITEMS AVAILABLE IN THE DIRECTORIES LISTED ABOVE (assets/, assets/images/)

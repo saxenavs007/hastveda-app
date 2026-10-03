@@ -322,7 +322,7 @@ class _CoupleReadingHistoryScreenState
             Icons.arrow_back_ios_new_rounded,
             color: Colors.white,
           ),
-          onPressed: () => context.pop(),
+          onPressed: popOrHome,
         ),
         actions: [
           IconButton(

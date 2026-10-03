@@ -1,6 +1,6 @@
 // Ask HastVeda Screen
-// Premium feature: 2 questions included free with Premium.
-// Additional questions available at ₹50 each via Cashfree.
+// Premium: 2 questions included.
+// Everyone else: one question for ₹59 (₹50 + 18% GST) via Cashfree.
 //
 // FIX 5: question_usage row is created BEFORE Cashfree checkout opens,
 // with payment_order_id pre-linked. This ensures webhook recovery works
@@ -20,6 +20,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../routes/app_routes.dart';
 import '../../services/analytics_service.dart';
+import '../../services/indian_tts.dart';
 import '../../services/cashfree_payment_service.dart';
 import '../../services/connectivity_service.dart';
 import '../../services/entitlement_notifier.dart';
@@ -27,6 +28,7 @@ import '../../services/entitlement_service.dart';
 import '../../services/supabase_service.dart';
 import '../../services/theme_provider.dart';
 import '../../theme/app_theme.dart';
+import '../../widgets/cashfree_platform_sheet.dart';
 import '../../widgets/premium_lock_widget.dart';
 import '../review_screen/review_screen.dart';
 
@@ -36,7 +38,14 @@ import '../premium_paywall_screen/cashfree_checkout_stub.dart'
 
 class AskHastVedaScreen extends StatefulWidget {
   final String locale;
-  const AskHastVedaScreen({super.key, this.locale = 'en'});
+  final String? initialQuestion;
+  final bool startPayment;
+  const AskHastVedaScreen({
+    super.key,
+    this.locale = 'en',
+    this.initialQuestion,
+    this.startPayment = false,
+  });
 
   @override
   State<AskHastVedaScreen> createState() => _AskHastVedaScreenState();
@@ -45,12 +54,14 @@ class AskHastVedaScreen extends StatefulWidget {
 class _AskHastVedaScreenState extends State<AskHastVedaScreen> {
   bool _isCheckingAccess = true;
   bool _hasAccess = false;
+  bool _isPremiumUser = false;
   bool _appliedLivePremium = false;
   bool _isLoading = false;
   bool _isSubmitting = false;
 
   // Question usage state
   int _freeQuestionsUsed = 0;
+  int _paidQuestionBalance = 0;
   int _totalQuestionsUsed = 0;
   List<Map<String, dynamic>> _questionHistory = [];
 
@@ -79,6 +90,10 @@ class _AskHastVedaScreenState extends State<AskHastVedaScreen> {
   @override
   void initState() {
     super.initState();
+    final seed = widget.initialQuestion?.trim();
+    if (seed != null && seed.isNotEmpty) {
+      _questionController.text = seed;
+    }
     analytics.track(
       HastVedaEvents.readingViewed,
       properties: {'screen': 'ask_hastveda'},
@@ -86,12 +101,20 @@ class _AskHastVedaScreenState extends State<AskHastVedaScreen> {
     _checkAccessAndLoad();
     _initSpeech();
     _initTts();
+    if (widget.startPayment) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _purchaseAndSubmitQuestion();
+      });
+    }
   }
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
     final premium = context.watch<EntitlementNotifier>().isPremium;
+    if (premium && !_isPremiumUser && !_isCheckingAccess) {
+      _isPremiumUser = true;
+    }
     if (!premium || _hasAccess) return;
     _hasAccess = true;
     _isCheckingAccess = false;
@@ -105,7 +128,6 @@ class _AskHastVedaScreenState extends State<AskHastVedaScreen> {
   }
 
   Future<void> _initSpeech() async {
-    if (kIsWeb) return; // Web speech handled differently
     try {
       _speechAvailable = await _speechToText.initialize(
         onError: (error) {
@@ -128,10 +150,7 @@ class _AskHastVedaScreenState extends State<AskHastVedaScreen> {
 
   Future<void> _initTts() async {
     try {
-      await _flutterTts.setLanguage(_isHindi ? 'hi-IN' : 'en-IN');
-      await _flutterTts.setSpeechRate(0.5);
-      await _flutterTts.setVolume(1.0);
-      await _flutterTts.setPitch(1.0);
+      await IndianTts.apply(_flutterTts, hindi: _isHindi);
 
       _flutterTts.setCompletionHandler(() {
         if (mounted) {
@@ -239,7 +258,7 @@ class _AskHastVedaScreenState extends State<AskHastVedaScreen> {
         });
       }
 
-      await _flutterTts.setLanguage(_isHindi ? 'hi-IN' : 'en-IN');
+      await IndianTts.apply(_flutterTts, hindi: _isHindi);
       final result = await _flutterTts.speak(answerText);
       if (result != 1) {
         // TTS failed
@@ -272,17 +291,15 @@ class _AskHastVedaScreenState extends State<AskHastVedaScreen> {
   Future<void> _checkAccessAndLoad() async {
     setState(() => _isCheckingAccess = true);
     try {
-      final canUse = await EntitlementService.instance.canUseFeature(
-        PremiumFeatures.askHastVeda,
-        forceRefresh: true,
-      );
+      final user = Supabase.instance.client.auth.currentUser;
       if (!mounted) return;
       final premium = context.read<EntitlementNotifier>().isPremium;
       setState(() {
-        _hasAccess = canUse || premium;
+        _isPremiumUser = premium;
+        _hasAccess = user != null;
         _isCheckingAccess = false;
       });
-      if (canUse || premium) {
+      if (user != null) {
         await _loadQuestionHistory();
         await _handleRecoveryRecords();
       }
@@ -290,8 +307,9 @@ class _AskHastVedaScreenState extends State<AskHastVedaScreen> {
       if (!mounted) return;
       final premium = context.read<EntitlementNotifier>().isPremium;
       setState(() {
+        _isPremiumUser = premium;
         _isCheckingAccess = false;
-        if (premium) _hasAccess = true;
+        _hasAccess = Supabase.instance.client.auth.currentUser != null;
       });
     }
   }
@@ -404,22 +422,32 @@ class _AskHastVedaScreenState extends State<AskHastVedaScreen> {
         setState(() => _isLoading = false);
         return;
       }
-      final data = await SupabaseService.instance.client
-          .from('question_usage')
-          .select()
-          .eq('user_id', userId)
-          .order('created_at', ascending: false)
-          .limit(20);
+      final monthStart = _istMonthStartIso();
+      final results = await Future.wait([
+        SupabaseService.instance.client
+            .from('question_usage')
+            .select()
+            .eq('user_id', userId)
+            .order('created_at', ascending: false)
+            .limit(20),
+        SupabaseService.instance.client
+            .from('question_usage')
+            .select('id')
+            .eq('user_id', userId)
+            .eq('is_free', true)
+            .gte('created_at', monthStart),
+        SupabaseService.instance.client
+            .from('user_profiles')
+            .select('paid_question_balance')
+            .eq('id', userId)
+            .maybeSingle(),
+      ]);
 
-      final questions = List<Map<String, dynamic>>.from(data as List);
-      // Count free questions (exclude recovery records without question text)
-      final freeUsed = questions
-          .where(
-            (q) =>
-                q['is_free'] == true &&
-                (q['question_text'] as String? ?? '').isNotEmpty,
-          )
-          .length;
+      final questions = List<Map<String, dynamic>>.from(results[0] as List);
+      final freeUsed = (results[1] as List).length;
+      final profile = results[2] as Map<String, dynamic>?;
+      final paidBalance =
+          (profile?['paid_question_balance'] as num?)?.toInt() ?? 0;
 
       if (mounted) {
         setState(() {
@@ -431,6 +459,7 @@ class _AskHastVedaScreenState extends State<AskHastVedaScreen> {
               )
               .toList();
           _freeQuestionsUsed = freeUsed;
+          _paidQuestionBalance = paidBalance;
           _totalQuestionsUsed = questions.length;
           _isLoading = false;
         });
@@ -439,6 +468,16 @@ class _AskHastVedaScreenState extends State<AskHastVedaScreen> {
       debugPrint('loadQuestionHistory error: $e');
       if (mounted) setState(() => _isLoading = false);
     }
+  }
+
+  String _istMonthStartIso() {
+    final shifted = DateTime.now().toUtc().add(
+      const Duration(hours: 5, minutes: 30),
+    );
+    final monthStartUtc = DateTime.utc(shifted.year, shifted.month, 1);
+    return monthStartUtc
+        .subtract(const Duration(hours: 5, minutes: 30))
+        .toIso8601String();
   }
 
   /// Calls the answer-hastveda-question Edge Function to process a question.
@@ -636,6 +675,11 @@ class _AskHastVedaScreenState extends State<AskHastVedaScreen> {
       return;
     }
 
+    if (!cashfreeCheckoutSupported) {
+      await showCashfreePlatformSheet(context, isHindi: _isHindi);
+      return;
+    }
+
     setState(() => _isSubmitting = true);
     String? questionUsageId;
     String? orderId;
@@ -729,8 +773,8 @@ class _AskHastVedaScreenState extends State<AskHastVedaScreen> {
         _questionController.clear();
         _showSnack(
           _isHindi
-              ? 'भुगतान सफल! उत्तर जल्द आएगा।'
-              : 'Payment successful! Answer coming soon.',
+              ? 'भुगतान सफल। 1 प्रश्न क्रेडिट अनलॉक हुआ और आपका प्रश्न भेज दिया गया।'
+              : 'Payment successful. 1 question credit unlocked and your question was sent.',
           isSuccess: true,
         );
 
@@ -811,13 +855,7 @@ class _AskHastVedaScreenState extends State<AskHastVedaScreen> {
         ),
         leading: IconButton(
           icon: Icon(Icons.arrow_back_ios_new_rounded, color: textPri),
-          onPressed: () {
-            if (context.canPop()) {
-              context.pop();
-            } else {
-              context.go(AppRoutes.homeScreen);
-            }
-          },
+          onPressed: popOrHome,
         ),
       ),
       body: _isCheckingAccess
@@ -908,10 +946,10 @@ class _AskHastVedaScreenState extends State<AskHastVedaScreen> {
         ? AppTheme.textSecondary
         : AppTheme.textSecondaryLight;
     final border = isDark ? AppTheme.outlineDark : AppTheme.outlineLight;
-    final primaryColor = isDark ? AppTheme.gold : AppTheme.deepPurple;
+    final primaryColor = isDark ? AppTheme.gold : AppTheme.confetti;
 
     final freeLeft = _freeQuotaPerPremium - _freeQuestionsUsed;
-    final hasFreeLeft = freeLeft > 0;
+    final hasFreeLeft = _isPremiumUser && freeLeft > 0;
 
     return SingleChildScrollView(
       child: Column(
@@ -936,11 +974,15 @@ class _AskHastVedaScreenState extends State<AskHastVedaScreen> {
                     Text(
                       hasFreeLeft
                           ? (_isHindi
-                                ? '$freeLeft मुफ़्त प्रश्न शेष'
-                                : '$freeLeft free question${freeLeft == 1 ? '' : 's'} remaining')
+                                ? 'इस महीने $freeLeft मुफ़्त प्रश्न शेष'
+                                : '$freeLeft of 2 free questions left this month')
+                          : _isPremiumUser
+                          ? (_isHindi
+                                ? 'इस महीने के मुफ़्त प्रश्न समाप्त — ₹59 प्रति प्रश्न, कोई सीमा नहीं'
+                                : 'Monthly free questions used — ₹59 each, no limit')
                           : (_isHindi
-                                ? 'मुफ़्त प्रश्न समाप्त — ₹50 प्रति प्रश्न'
-                                : 'Free questions used — ₹50 per question'),
+                                ? '₹59 प्रति प्रश्न (₹50 + GST) · जितने चाहें'
+                                : '₹59 per question (₹50 + GST) · no limit'),
                       style: GoogleFonts.outfit(
                         fontSize: 13,
                         fontWeight: FontWeight.w700,
@@ -949,15 +991,15 @@ class _AskHastVedaScreenState extends State<AskHastVedaScreen> {
                     ),
                     Text(
                       _isHindi
-                          ? 'कुल पूछे गए: $_totalQuestionsUsed'
-                          : 'Total asked: $_totalQuestionsUsed',
+                          ? 'भुगतान क्रेडिट तैयार: $_paidQuestionBalance · कुल $_totalQuestionsUsed'
+                          : 'Paid credits ready: $_paidQuestionBalance · asked $_totalQuestionsUsed',
                       style: GoogleFonts.outfit(fontSize: 11, color: textSec),
                     ),
                   ],
                 ),
               ),
-              // Free quota dots
-              Row(
+              if (_isPremiumUser)
+                Row(
                 children: List.generate(_freeQuotaPerPremium, (i) {
                   final used = i < _freeQuestionsUsed;
                   return Container(
@@ -997,7 +1039,7 @@ class _AskHastVedaScreenState extends State<AskHastVedaScreen> {
                   ),
                   const Spacer(),
                   // Microphone button
-                  if (!kIsWeb && _speechAvailable)
+                  if (_speechAvailable)
                     _buildMicButton(primaryColor),
                 ],
               ),
@@ -1481,13 +1523,17 @@ class _AskHastVedaScreenState extends State<AskHastVedaScreen> {
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      _isHindi
-                          ? 'आपके पास $_freeQuotaPerPremium मुफ़्त प्रश्न हैं।'
-                          : 'You have $_freeQuotaPerPremium free questions included.',
+                      _isPremiumUser
+                          ? (_isHindi
+                                ? 'प्रीमियम में हर महीने 2 मुफ़्त प्रश्न मिलते हैं। उसके बाद ₹59 प्रति प्रश्न।'
+                                : 'Premium includes 2 free questions each month. After that, each question is ₹59.')
+                          : (_isHindi
+                                ? 'हर प्रश्न ₹59 (₹50 + GST) का है। जितने चाहें पूछ सकते हैं।'
+                                : 'Each question is ₹59 (₹50 + GST). Ask as many as you want.'),
                       textAlign: TextAlign.center,
                       style: GoogleFonts.outfit(fontSize: 13, color: textSec),
                     ),
-                    if (!kIsWeb && _speechAvailable) ...[
+                    if (_speechAvailable) ...[
                       const SizedBox(height: 20),
                       Text(
                         _isHindi

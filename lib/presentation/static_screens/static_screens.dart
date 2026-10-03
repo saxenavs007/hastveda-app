@@ -56,7 +56,7 @@ class _LanguageSelectionScreenState extends State<LanguageSelectionScreen> {
     final textSec = isDark
         ? AppTheme.textSecondary
         : AppTheme.textSecondaryLight;
-    final primaryColor = isDark ? AppTheme.gold : AppTheme.deepPurple;
+    final primaryColor = isDark ? AppTheme.gold : AppTheme.confetti;
     final cardBg = isDark ? AppTheme.surfaceElevated : AppTheme.surfaceLight;
     final cardBorder = isDark ? AppTheme.outlineDark : AppTheme.outlineLight;
 
@@ -219,7 +219,7 @@ class HelpAboutScreen extends StatelessWidget {
     final textSec = isDark
         ? AppTheme.textSecondary
         : AppTheme.textSecondaryLight;
-    final primaryColor = isDark ? AppTheme.gold : AppTheme.deepPurple;
+    final primaryColor = isDark ? AppTheme.gold : AppTheme.confetti;
     final cardBg = isDark ? AppTheme.surfaceElevated : AppTheme.surfaceLight;
     final cardBorder = isDark ? AppTheme.outlineDark : AppTheme.outlineLight;
 

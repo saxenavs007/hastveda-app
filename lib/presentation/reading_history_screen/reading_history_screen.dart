@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_tts/flutter_tts.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
@@ -6,6 +7,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../routes/app_routes.dart';
 import '../../services/analytics_service.dart';
+import '../../services/indian_tts.dart';
 import '../../services/app_strings.dart';
 import '../../services/error_logger.dart';
 import '../../services/locale_provider.dart';
@@ -198,7 +200,7 @@ class _ReadingHistoryScreenState extends State<ReadingHistoryScreen> {
                 ? Icons.close_rounded
                 : Icons.arrow_back_ios_new_rounded,
           ),
-          onPressed: _compareMode ? _toggleCompareMode : () => context.pop(),
+          onPressed: _compareMode ? _toggleCompareMode : popOrHome,
         ),
         actions: [
           if (!_isLoading && !_hasError && canShowCompare && !_compareMode)
@@ -619,7 +621,9 @@ class DetailedReadingScreen extends StatefulWidget {
 
 class _DetailedReadingScreenState extends State<DetailedReadingScreen> {
   bool _isLoading = true;
+  bool _isSpeaking = false;
   Map<String, dynamic>? _reading;
+  final FlutterTts _tts = FlutterTts();
   // Always derive language from the live provider so the reading detail
   // reflects the current app language, not the route parameter default.
   bool get _isHindi => context.read<LocaleProvider>().languageCode == 'hi';
@@ -628,7 +632,52 @@ class _DetailedReadingScreenState extends State<DetailedReadingScreen> {
   @override
   void initState() {
     super.initState();
+    _tts.setCompletionHandler(() {
+      if (mounted) setState(() => _isSpeaking = false);
+    });
+    _tts.setCancelHandler(() {
+      if (mounted) setState(() => _isSpeaking = false);
+    });
     _loadReading();
+  }
+
+  @override
+  void dispose() {
+    _tts.stop();
+    super.dispose();
+  }
+
+  String? _localeCode;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final code = context.watch<LocaleProvider>().languageCode;
+    if (_localeCode != null && _localeCode != code && _isSpeaking) {
+      _isSpeaking = false;
+      _tts.stop();
+    }
+    _localeCode = code;
+  }
+
+  Future<void> _speakSummary(String title, String summary) async {
+    if (_isSpeaking) {
+      await _tts.stop();
+      if (mounted) setState(() => _isSpeaking = false);
+      return;
+    }
+    final script = [title, summary].where((part) => part.trim().isNotEmpty).join('. ');
+    if (script.isEmpty) return;
+    try {
+      await _tts.awaitSpeakCompletion(true);
+      await IndianTts.apply(_tts, hindi: _isHindi);
+      if (!mounted) return;
+      setState(() => _isSpeaking = true);
+      await _tts.speak(script);
+      if (mounted) setState(() => _isSpeaking = false);
+    } catch (_) {
+      if (mounted) setState(() => _isSpeaking = false);
+    }
   }
 
   Future<void> _loadReading() async {
@@ -687,7 +736,7 @@ class _DetailedReadingScreenState extends State<DetailedReadingScreen> {
         ),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios_new_rounded),
-          onPressed: () => context.pop(),
+          onPressed: popOrHome,
         ),
       ),
       body: _isLoading
@@ -741,6 +790,18 @@ class _DetailedReadingScreenState extends State<DetailedReadingScreen> {
                                       ),
                                     ),
                                 ],
+                              ),
+                            ),
+                            IconButton(
+                              tooltip: _isHindi
+                                  ? (_isSpeaking ? 'रोकें' : 'पढ़कर सुनाएँ')
+                                  : (_isSpeaking ? 'Stop' : 'Listen'),
+                              onPressed: () => _speakSummary(readingTitle, summary),
+                              icon: Icon(
+                                _isSpeaking
+                                    ? Icons.stop_circle_rounded
+                                    : Icons.volume_up_rounded,
+                                color: AppTheme.primary,
                               ),
                             ),
                             if (isPremium)

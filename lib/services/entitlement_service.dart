@@ -367,34 +367,38 @@ class EntitlementService {
     return const FreeTierLimits();
   }
 
+  /// Monthly palm scans. Normal accounts get 2. Premium accounts get 5.
+  static const int normalScansPerMonth = 2;
+  static const int premiumScansPerMonth = 5;
+
   /// Check if user has reached a free tier limit.
   Future<FreeTierLimitResult> checkFreeTierLimit(String limitType) async {
     final hasPremium = await isPremiumUser();
-    if (hasPremium) {
-      return FreeTierLimitResult(allowed: true, isPremium: true);
-    }
 
     final limits = await getFreeTierLimits();
 
     switch (limitType) {
       case 'scans_per_month':
         // QA/testing bypass — see lib/services/qa_config.dart for how to
-        // switch back to the production 2-scans-per-month limit.
+        // switch back to the production monthly scan limit.
         if (QaConfig.bypassFreeScanQuota) {
           debugPrint(
             '[EntitlementService] scans_per_month check bypassed by QaConfig.bypassFreeScanQuota',
           );
           return FreeTierLimitResult(
             allowed: true,
-            limit: limits.scansPerMonth,
+            isPremium: hasPremium,
+            limit: hasPremium ? premiumScansPerMonth : normalScansPerMonth,
             limitType: limitType,
           );
         }
         final count = await _supabase.getMonthlyScansCount();
+        final limit = hasPremium ? premiumScansPerMonth : normalScansPerMonth;
         return FreeTierLimitResult(
-          allowed: count < limits.scansPerMonth,
+          allowed: count < limit,
+          isPremium: hasPremium,
           current: count,
-          limit: limits.scansPerMonth,
+          limit: limit,
           limitType: limitType,
         );
       case 'predictions_visible':
@@ -410,6 +414,9 @@ class EntitlementService {
           limitType: limitType,
         );
       default:
+        if (hasPremium) {
+          return FreeTierLimitResult(allowed: true, isPremium: true);
+        }
         return FreeTierLimitResult(allowed: true);
     }
   }
@@ -521,5 +528,5 @@ class FreeTierLimitResult {
     this.limitType,
   });
 
-  bool get hasReachedLimit => !allowed && !isPremium;
+  bool get hasReachedLimit => !allowed;
 }

@@ -252,9 +252,9 @@ class AppStrings {
     'Monthly limit poori ho gayi',
   );
   String freeScanLimitReached(int limit) => _s(
-    'You have used all $limit free scans for this month.\n\nUpgrade to Premium for unlimited palm readings.',
-    'आपने इस महीने के सभी $limit निःशुल्क स्कैन उपयोग कर लिए हैं।\n\nअसीमित हस्तरेखा पठन के लिए प्रीमियम लें।',
-    'Aapne is mahine ke saare $limit free scans use kar liye hain.\n\nUnlimited palm readings ke liye Premium lein.',
+    'You have used all $limit palm scans for this month. Normal accounts can scan 2 times a month. Premium accounts can scan 5 times a month. Your allowance resets next month.',
+    'आपने इस महीने के सभी $limit हथेली स्कैन उपयोग कर लिए हैं। सामान्य खाते महीने में 2 बार और प्रीमियम खाते 5 बार स्कैन कर सकते हैं। सीमा अगले महीने फिर से शुरू होगी।',
+    'Aapne is mahine ke saare $limit palm scans use kar liye hain. Normal account mahine mein 2 baar aur Premium 5 baar scan kar sakta hai. Limit agle mahine reset hogi.',
   );
   String get signInToContinue => _s(
     'Sign In to Continue',

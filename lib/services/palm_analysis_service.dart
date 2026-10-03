@@ -136,6 +136,8 @@ class PalmAnalysisResult {
   final List<String> keyTraitsHi;
   final String dailyInsightEn;
   final String dailyInsightHi;
+  final String remediesEn;
+  final String remediesHi;
   final String? confidenceNoteEn;
   final String? confidenceNoteHi;
   final bool isPremium;
@@ -168,6 +170,8 @@ class PalmAnalysisResult {
     required this.keyTraitsHi,
     required this.dailyInsightEn,
     required this.dailyInsightHi,
+    this.remediesEn = '',
+    this.remediesHi = '',
     this.confidenceNoteEn,
     this.confidenceNoteHi,
     required this.isPremium,
@@ -272,6 +276,8 @@ class PalmAnalysisResult {
       keyTraitsHi: (data['key_traits_hi'] as List?)?.cast<String>() ?? [],
       dailyInsightEn: data['daily_insight_en'] as String? ?? '',
       dailyInsightHi: data['daily_insight_hi'] as String? ?? '',
+      remediesEn: _remedyText(data, hindi: false),
+      remediesHi: _remedyText(data, hindi: true),
       confidenceNoteEn: data['confidence_note_en'] as String?,
       confidenceNoteHi: data['confidence_note_hi'] as String?,
       isPremium: data['is_premium'] as bool? ?? false,
@@ -283,6 +289,22 @@ class PalmAnalysisResult {
       palmShape: palmShapeRaw,
     );
   }
+}
+
+/// Remedies live on the Stage B object, or inside personality_analysis after save.
+String _remedyText(Map<String, dynamic> data, {required bool hindi}) {
+  final direct = data['remedies'];
+  if (direct is Map) {
+    final key = hindi ? 'content_hi' : 'content_en';
+    final text = direct[key] as String? ?? '';
+    if (text.isNotEmpty) return text;
+  }
+  final pa = data['personality_analysis'];
+  if (pa is Map) {
+    final key = hindi ? 'remedies_hi' : 'remedies_en';
+    return pa[key] as String? ?? '';
+  }
+  return '';
 }
 
 /// Parse future_tendencies from either direct Stage B field or DB personality_analysis
@@ -425,8 +447,13 @@ extension PalmAnalysisStageExt on PalmAnalysisStage {
 class FreeScanLimitException implements Exception {
   final int limit;
   final int used;
+  final bool isPremium;
 
-  const FreeScanLimitException({required this.limit, required this.used});
+  const FreeScanLimitException({
+    required this.limit,
+    required this.used,
+    this.isPremium = false,
+  });
 }
 
 /// Raised when the image failed the quality gate.
@@ -754,10 +781,14 @@ class PalmAnalysisService {
       // The monthly free-scan quota returns 403, which also lands here. Rebuild
       // it as a typed exception so the UI can show the real limit and offer the
       // upgrade path instead of a generic failure.
-      if (details is Map && details['code'] == 'FREE_LIMIT_REACHED') {
+      if (details is Map &&
+          (details['code'] == 'FREE_LIMIT_REACHED' ||
+              details['code'] == 'SCAN_LIMIT_REACHED')) {
         throw FreeScanLimitException(
           limit: (details['limit'] as num?)?.toInt() ?? 2,
           used: (details['used'] as num?)?.toInt() ?? 0,
+          isPremium: details['is_premium'] == true ||
+              details['code'] == 'SCAN_LIMIT_REACHED',
         );
       }
       if (details is Map &&

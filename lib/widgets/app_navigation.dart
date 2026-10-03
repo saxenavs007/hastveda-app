@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
 import './custom_icon_widget.dart';
+import '../routes/app_routes.dart';
 import '../theme/app_theme.dart';
 import '../services/locale_provider.dart';
 import '../services/theme_provider.dart';
@@ -34,11 +35,20 @@ class _AppNavigationState extends State<AppNavigation> {
     ),
     _TabSpec(icon: 'favorite_border', selectedIcon: 'favorite', branchIndex: 3),
     _TabSpec(icon: 'person_outline', selectedIcon: 'person', branchIndex: 4),
+    _TabSpec(
+      icon: 'notifications_outlined',
+      selectedIcon: 'notifications',
+      branchIndex: 5,
+    ),
   ];
 
   void _onTabTap(int visualIndex) {
     final tab = _tabs[visualIndex];
     setState(() => _selectedVisualIndex = visualIndex);
+    if (tab.branchIndex == 0) {
+      goToHome();
+      return;
+    }
     widget.navigationShell.goBranch(
       tab.branchIndex,
       initialLocation: tab.branchIndex == widget.navigationShell.currentIndex,
@@ -74,7 +84,14 @@ class _AppNavigationState extends State<AppNavigation> {
         ? AppTheme.textMuted
         : AppTheme.textMutedLight;
 
-    final tabLabels = [s.home, s.scan, s.readings, s.couple, s.profile];
+    final tabLabels = [
+      s.home,
+      s.scan,
+      s.readings,
+      s.couple,
+      s.profile,
+      s.notifications,
+    ];
 
     return SafeArea(
       top: false,

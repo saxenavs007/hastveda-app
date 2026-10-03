@@ -23,30 +23,30 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   final List<_OnboardingPage> _pages = const [
     _OnboardingPage(
       emoji: '✋',
-      title: 'Discover Your Palm Story',
+      title: 'Decode Your Cosmic Blueprint',
       subtitle:
-          'HastVeda uses AI to decode the ancient wisdom hidden in your palm lines — delivering personalized insights about your life, personality and future tendencies.',
-      imageAsset: 'assets/images/hastveda_onboarding_1_palm_discovery.png',
+          'HastVeda harnesses advanced AI to unlock the ancient wisdom inscribed in your palm lines — offering deeply personalized insights into your character, life path, and hidden destiny.',
+      imageAsset: 'assets/images/hastveda_onboarding_1_cosmic_blueprint.png',
       semanticLabel:
-          'Elegant close-up of a human palm with softly glowing golden palm lines and delicate light particles against a deep midnight purple background',
+          'Majestic glowing golden mystic palm against a deep cosmic nebula with subtle constellation lines',
     ),
     _OnboardingPage(
       emoji: '🔮',
       title: 'AI-Powered Palm Analysis',
       subtitle:
-          'Our advanced AI analyzes your Life Line, Heart Line, Head Line, Fate Line and more — providing interpretations rooted in traditional palmistry.',
+          'Our proprietary AI engine meticulously analyzes your Life Line, Heart Line, Head Line, Fate Line, and more — providing interpretations deeply rooted in traditional palmistry but enhanced by modern technology.',
       imageAsset: 'assets/images/hastveda_onboarding_2_ai_analysis.png',
       semanticLabel:
-          'Human palm illuminated with subtle holographic digital intelligence elements, constellation nodes and golden rim light suggesting AI palm analysis',
+          'Futuristic glowing hand with intricate golden data lines and a biometric grid overlay',
     ),
     _OnboardingPage(
       emoji: '💫',
-      title: 'Personalized Daily Guidance',
+      title: 'Your Personalized Daily Guidance',
       subtitle:
-          'Receive daily, weekly, monthly and yearly predictions tailored to your unique palm profile. Understand tendencies in love, career, wealth and relationships.',
-      imageAsset: 'assets/images/hastveda_onboarding_3_golden_insights.png',
+          'Receive daily, weekly, monthly, and yearly predictions uniquely tailored to your personal palm profile. Gain profound clarity on matters of love, career, wealth, and relationships.',
+      imageAsset: 'assets/images/hastveda_onboarding_3_daily_guidance.png',
       semanticLabel:
-          'Elegant human palm bathed in warm golden light rays with floating golden particles against a deep midnight purple cosmic background',
+          'Majestic glowing palm filled with floating astrological symbols and celestial sparkling dust',
     ),
   ];
 
@@ -231,7 +231,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   child: ClipRRect(
                     borderRadius: BorderRadius.circular(9),
                     child: Image.asset(
-                      'assets/images/ChatGPT_Image_Aug_10__2026__12_57_14_AM-1786333327390.png',
+                      'assets/images/hastveda_logo.png',
                       fit: BoxFit.contain,
                     ),
                   ),
@@ -361,7 +361,7 @@ class _OnboardingPageView extends StatelessWidget {
                   color: AppTheme.textSecondary,
                   height: 1.5,
                 ),
-                maxLines: isSmall ? 3 : 5,
+                maxLines: isSmall ? 7 : 8,
                 overflow: TextOverflow.ellipsis,
               ),
             ],

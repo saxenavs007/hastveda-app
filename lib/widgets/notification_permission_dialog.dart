@@ -40,7 +40,7 @@ class NotificationPermissionDialog extends StatelessWidget {
     final textSec = isDark
         ? AppTheme.textSecondary
         : AppTheme.textSecondaryLight;
-    final primaryColor = isDark ? AppTheme.gold : AppTheme.deepPurple;
+    final primaryColor = isDark ? AppTheme.gold : AppTheme.confetti;
 
     return Dialog(
       backgroundColor: bg,

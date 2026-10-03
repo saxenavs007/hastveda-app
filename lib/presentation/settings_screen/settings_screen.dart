@@ -55,7 +55,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final textSec = isDark
         ? AppTheme.textSecondary
         : AppTheme.textSecondaryLight;
-    final primaryColor = isDark ? AppTheme.gold : AppTheme.deepPurple;
+    final primaryColor = isDark ? AppTheme.gold : AppTheme.confetti;
     final sectionHeaderColor = isDark
         ? const Color(0xFF8B7355)
         : AppTheme.textSecondaryLight;
@@ -398,7 +398,7 @@ class _ThemeSelector extends StatelessWidget {
               final selectedBg = isDark
                   ? AppTheme.goldMuted
                   : AppTheme.purpleMutedLight;
-              final selectedText = isDark ? AppTheme.gold : AppTheme.deepPurple;
+              final selectedText = isDark ? AppTheme.gold : AppTheme.confetti;
               final unselectedText = isDark
                   ? AppTheme.textMuted
                   : AppTheme.textMutedLight;
@@ -424,7 +424,7 @@ class _ThemeSelector extends StatelessWidget {
                       borderRadius: BorderRadius.circular(10),
                       border: Border.all(
                         color: isSelected
-                            ? (isDark ? AppTheme.gold : AppTheme.deepPurple)
+                            ? (isDark ? AppTheme.gold : AppTheme.confetti)
                                   .withAlpha(80)
                             : cardBorder,
                       ),
@@ -697,7 +697,7 @@ class _AppInfoFooter extends StatelessWidget {
         ? AppTheme.textSecondary
         : AppTheme.textSecondaryLight;
     final textMuted = isDark ? AppTheme.textMuted : AppTheme.textMutedLight;
-    final primaryColor = isDark ? AppTheme.gold : AppTheme.deepPurple;
+    final primaryColor = isDark ? AppTheme.gold : AppTheme.confetti;
 
     return Column(
       children: [
@@ -936,7 +936,7 @@ class _SettingsToggle extends StatelessWidget {
           Switch(
             value: value,
             onChanged: onChanged,
-            activeThumbColor: isDark ? AppTheme.gold : AppTheme.deepPurple,
+            activeThumbColor: isDark ? AppTheme.gold : AppTheme.confetti,
           ),
         ],
       ),

@@ -513,23 +513,35 @@ async function callGemini(
   );
 }
 
-// ── Free tier scan quota ──────────────────────────────────────────────────────
-const DEFAULT_FREE_SCANS_PER_MONTH = 2;
+// ── Monthly scan quota ────────────────────────────────────────────────────────
+const NORMAL_SCANS_PER_MONTH = 2;
+const PREMIUM_SCANS_PER_MONTH = 5;
 
-async function freeScansUsedThisMonth(
+function istMonthStartIso(): string {
+  const istOffsetMs = (5 * 60 + 30) * 60 * 1000;
+  const istNow = new Date(Date.now() + istOffsetMs);
+  const monthStartUtcMs = Date.UTC(
+    istNow.getUTCFullYear(),
+    istNow.getUTCMonth(),
+    1,
+  ) - istOffsetMs;
+  return new Date(monthStartUtcMs).toISOString();
+}
+
+async function scansUsedThisMonth(
   client: any,
   userId: string,
   currentScanId: string
 ): Promise<number> {
-  const now = new Date();
-  const monthStart = new Date(
-    Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)
-  ).toISOString();
+  const monthStart = istMonthStartIso();
 
+  // Only a saved reading consumes the monthly allowance. Pending, processing,
+  // and failed rows — including this in-progress scan — stay at 0 for a new account.
   const { count, error } = await client
     .from("palm_scans")
     .select("id", { count: "exact", head: true })
     .eq("user_id", userId)
+    .eq("status", "completed")
     .gte("created_at", monthStart)
     .neq("id", currentScanId);
 
@@ -541,20 +553,6 @@ async function freeScansUsedThisMonth(
     return 0;
   }
   return count ?? 0;
-}
-
-async function freeScanLimit(client: any): Promise<number> {
-  const { data, error } = await client
-    .from("app_settings")
-    .select("value")
-    .eq("key", "free_tier_limits")
-    .maybeSingle();
-
-  if (error || !data) return DEFAULT_FREE_SCANS_PER_MONTH;
-  const configured = Number(data.value?.scans_per_month);
-  return Number.isFinite(configured) && configured > 0
-    ? configured
-    : DEFAULT_FREE_SCANS_PER_MONTH;
 }
 
 // ── Stage A: Image validation + feature extraction + Palm Intelligence Profile ─
@@ -800,7 +798,8 @@ ${Object.entries(lifeAreas).map(([area, data]: [string, any]) => {
 - Every "content_hi", "title_hi", "summary_hi", "key_traits_hi", "daily_insight_hi", "confidence_note_hi" field MUST be written in natural, fluent Hindi (Devanagari script).
 - The Hindi text must be warm, culturally appropriate, and natural — NOT a word-for-word machine translation.
 - Every "content_en", "title_en", "summary_en", "key_traits_en", "daily_insight_en", "confidence_note_en" field must be written in English.
-- Both language versions must convey the SAME underlying interpretation — only the language changes, not the meaning.`;
+- Both language versions must convey the SAME underlying interpretation — only the language changes, not the meaning.
+- LENGTH PARITY: every Hindi field must contain the same number of sentences and the same specific details as its English pair. Do not shorten, summarize, or drop examples in Hindi. If summary_en is 10 sentences, summary_hi is 10 sentences covering the same life situations.`;
   } else if (language === "hi-Latn") {
     langInstruction = `LANGUAGE REQUIREMENT (CRITICAL):
 - The user has selected HINGLISH as their language.
@@ -824,8 +823,11 @@ ${Object.entries(lifeAreas).map(([area, data]: [string, any]) => {
   // PREMIUM: wealth, career, future_tendencies, palm marks, detailed report,
   //          deep predictions, detailed strengths, remedies, advanced analysis.
   const premiumNote = isPremium
-    ? "Generate COMPLETE detailed interpretations for all sections. Each content field should be 5-7 sentences with specific references to the palm signals identified above."
-    : "Generate FULL rich interpretations for personality, love_relationships, health and life_path — these are FREE sections and must always contain real, deeply personal content. For career, wealth and future_tendencies: provide a brief 1-sentence teaser only.";
+    ? `PREMIUM READING:
+- Generate COMPLETE detailed interpretations for every section.
+- future_tendencies must be an exhaustive 5 to 10 year outlook, written as three phases: the next 1-2 years, years 3-5, and years 5-10. Cover career direction, money habits, and relationships. 10-14 sentences in BOTH languages, grounded in the profile. Never predict death, disease, exact lifespan, or guaranteed wealth.
+- remedies must list 4 to 6 authentic, actionable Vedic remedies for the tensions or challenges actually visible in this profile. Each remedy names the issue, the traditional practice (mantra with a short count, a simple home ritual, daan, a vrat day, or a gemstone only as an optional traditional association), and the exact steps the person can do this week. Do not give medical or financial guarantees.`
+    : "Generate FULL rich interpretations for personality, love_relationships, health and life_path — these are FREE sections and must always contain real, deeply personal content. For career, wealth, future_tendencies and remedies: provide a brief 1-sentence teaser only.";
 
   return `You are HastVeda's palm reading narrative engine.
 
@@ -848,7 +850,8 @@ The desired customer reaction is: "YES — THIS IS WHAT IS GOING ON WITH ME."
 
 Every sentence must be grounded in the specific signals identified in the Palm Intelligence Profile below.
 Two different profiles MUST produce demonstrably different readings.
-Do NOT write generic palmistry paragraphs. Every sentence should be traceable to a specific signal.
+Do NOT write generic palmistry or horoscope paragraphs. Banned filler includes "you are a unique soul", "the universe has a plan", "trust the journey", and "good things are coming".
+Every paragraph must name at least one specific signal from this profile and translate it into a current life situation the reader can recognize.
 
 ${langInstruction}
 
@@ -979,9 +982,17 @@ Return ONLY valid JSON (no markdown fences) matching this exact structure:
   },
   "future_tendencies": {
     "title_en": <string in English>,
+    "title_hi": <string in secondary language, same specificity as English>,
+    "content_en": <string. Premium: 10-14 sentences covering the next 1-2 years, years 3-5, and years 5-10 for career, money, and relationships, each phase tied to a named palm signal. Free: 1-sentence teaser only.>,
+    "content_hi": <string, SAME sentence count and detail as content_en>,
+    "score": <integer 60-95>,
+    "is_premium_locked": <boolean>
+  },
+  "remedies": {
+    "title_en": <string in English>,
     "title_hi": <string in secondary language>,
-    "content_en": <string in English, 1-sentence teaser for free users or full 4-5 sentences for premium>,
-    "content_hi": <string in secondary language>,
+    "content_en": <string. Premium: 4-6 numbered Vedic remedies. Each item states the palm-based issue, the traditional remedy, and the steps to do this week. Free: 1-sentence teaser only.>,
+    "content_hi": <string, SAME sentence count and detail as content_en>,
     "score": <integer 60-95>,
     "is_premium_locked": <boolean>
   },
@@ -1141,47 +1152,52 @@ serve(async (req) => {
       return new Date(e.expires_at) > now;
     });
 
-    // ── Enforce free-tier scan quota ────────────────────────────────────────
-    if (!isPremium) {
-      const limit = await freeScanLimit(serviceClient);
-      const used = await freeScansUsedThisMonth(serviceClient, userId, scan_id);
+    // ── Enforce monthly scan quota ──────────────────────────────────────────
+    // Normal accounts: 2 scans / month. Premium accounts: 5 scans / month.
+    const limit = isPremium ? PREMIUM_SCANS_PER_MONTH : NORMAL_SCANS_PER_MONTH;
+    const used = await scansUsedThisMonth(serviceClient, userId, scan_id);
 
-      if (used >= limit) {
-        console.log("[palm-analysis] free scan limit reached", { used, limit });
-        await writeSideEffect(
-          serviceClient
-            .from("palm_scans")
-            .update({ status: "failed" })
-            .eq("id", scan_id),
-          "palm_scans->failed(quota)"
-        );
-        await logFailure(serviceClient, {
-          userId,
-          scanId: scan_id,
-          handSide: hand_side,
-          language,
-          stage: "quota",
-          failureCode: "FREE_LIMIT_REACHED",
-          reason: `Free scan limit reached (${used}/${limit} this month)`,
-          httpStatus: 403,
-          appVersion: clientMeta.appVersion,
-          platform: clientMeta.platform,
-          deviceModel: clientMeta.deviceModel,
-        });
-        return new Response(
-          JSON.stringify({
-            error: "Free scan limit reached for this month",
-            code: "FREE_LIMIT_REACHED",
-            reason: "FREE_LIMIT_REACHED",
-            limit,
-            used,
-          }),
-          {
-            status: 403,
-            headers: { ...corsHeaders, "Content-Type": "application/json" },
-          }
-        );
-      }
+    if (used >= limit) {
+      const code = isPremium ? "SCAN_LIMIT_REACHED" : "FREE_LIMIT_REACHED";
+      console.log("[palm-analysis] monthly scan limit reached", {
+        used,
+        limit,
+        isPremium,
+      });
+      await writeSideEffect(
+        serviceClient
+          .from("palm_scans")
+          .update({ status: "failed" })
+          .eq("id", scan_id),
+        "palm_scans->failed(quota)"
+      );
+      await logFailure(serviceClient, {
+        userId,
+        scanId: scan_id,
+        handSide: hand_side,
+        language,
+        stage: "quota",
+        failureCode: code,
+        reason: `Monthly scan limit reached (${used}/${limit})`,
+        httpStatus: 403,
+        appVersion: clientMeta.appVersion,
+        platform: clientMeta.platform,
+        deviceModel: clientMeta.deviceModel,
+      });
+      return new Response(
+        JSON.stringify({
+          error: "Monthly scan limit reached",
+          code,
+          reason: code,
+          limit,
+          used,
+          is_premium: isPremium,
+        }),
+        {
+          status: 403,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
     }
 
     // ── Create analysis record (processing) ─────────────────────────────────
@@ -1472,13 +1488,16 @@ serve(async (req) => {
     let stageBResult: any;
     try {
       const stageBPrompt = buildStageBPrompt(stageAResult, language, isPremium);
+      const stageBTokens = isPremium || language === "hi" || language === "hi-Latn"
+        ? 16384
+        : 12000;
       stageBResult = await callGeminiJson(
         "Stage B",
         stageBPrompt,
         undefined,
         undefined,
         0.6,
-        12000  // Increased token budget for longer readings
+        stageBTokens
       );
     } catch (e: any) {
       console.error("[palm-analysis] Stage B failed", { message: e?.message });
@@ -1585,6 +1604,10 @@ serve(async (req) => {
         future_tendencies_hi: stageBResult.future_tendencies?.content_hi || "",
         future_tendencies_locked: !isPremium, // policy-driven, not model-driven
         future_tendencies_score: stageBResult.future_tendencies?.score || 75,
+        remedies_en: stageBResult.remedies?.content_en || "",
+        remedies_hi: stageBResult.remedies?.content_hi || "",
+        remedies_locked: !isPremium,
+        remedies_score: stageBResult.remedies?.score || 75,
       },
       summary: stageBResult.summary_en || "",
       summary_hi: stageBResult.summary_hi || "",
@@ -1748,6 +1771,7 @@ serve(async (req) => {
           health: stageBResult.health || {},
           life_path: stageBResult.life_path || {},
           future_tendencies: stageBResult.future_tendencies || {},
+          remedies: stageBResult.remedies || {},
           // Line summaries for palm_line_screen display
           head_line_summary_en: stageBResult.head_line_summary_en || "",
           head_line_summary_hi: stageBResult.head_line_summary_hi || "",

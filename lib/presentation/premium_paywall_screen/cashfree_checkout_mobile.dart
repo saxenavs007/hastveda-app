@@ -1,5 +1,7 @@
 import 'dart:async';
+import 'dart:io' show Platform;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter_cashfree_pg_sdk/api/cfsession/cfsession.dart';
 import 'package:flutter_cashfree_pg_sdk/api/cfpayment/cfwebcheckoutpayment.dart';
 import 'package:flutter_cashfree_pg_sdk/api/cfpaymentgateway/cfpaymentgatewayservice.dart';
@@ -21,6 +23,13 @@ Future<bool?> openCashfreeCheckout({
   required Future<bool> Function(String orderId) onVerifyPayment,
   required void Function(String errorMessage) onError,
 }) async {
+  if (kIsWeb || !(Platform.isAndroid || Platform.isIOS)) {
+    onError(
+      'Cashfree checkout on this device could not start the mobile payment SDK. Use the HastVeda Android or iOS app to pay.',
+    );
+    return null;
+  }
+
   final cfEnvironment = environment == 'production'
       ? CFEnvironment.PRODUCTION
       : CFEnvironment.SANDBOX;

@@ -131,7 +131,7 @@ class _HomeScreenState extends State<HomeScreen> {
         ? AppTheme.surfaceElevated
         : AppTheme.surfaceElevatedLight;
     final outline = isDark ? AppTheme.outlineDark : AppTheme.outlineLight;
-    final primaryColor = isDark ? AppTheme.gold : AppTheme.deepPurple;
+    final primaryColor = isDark ? AppTheme.gold : AppTheme.confetti;
 
     return Scaffold(
       backgroundColor: bg,
@@ -146,7 +146,7 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
               const SizedBox(width: 8),
               GestureDetector(
-                onTap: () => context.push(AppRoutes.notifications),
+                onTap: () => context.go(AppRoutes.notifications),
                 child: Container(
                   width: 36,
                   height: 36,
@@ -270,13 +270,19 @@ class _HomeScreenState extends State<HomeScreen> {
                                 // or the upgrade banner for free users.
                                 if (_isPremium == true)
                                   _AskHastVedaCard(isDark: isDark)
-                                else
+                                else ...[
+                                  _AskHastVedaCard(
+                                    isDark: isDark,
+                                    payPerQuestion: true,
+                                  ),
+                                  const SizedBox(height: 12),
                                   _PremiumBanner(
                                     onTap: () =>
                                         context.push(AppRoutes.premiumPaywall),
                                     s: s,
                                     isDark: isDark,
                                   ),
+                                ],
                                 const SizedBox(height: 20),
                               ],
                             ),
@@ -348,7 +354,7 @@ class _ScanCtaCard extends StatelessWidget {
           borderRadius: BorderRadius.circular(20),
           boxShadow: [
             BoxShadow(
-              color: (isDark ? AppTheme.gold : AppTheme.deepPurple).withAlpha(
+              color: (isDark ? AppTheme.gold : AppTheme.confetti).withAlpha(
                 60,
               ),
               blurRadius: 20,
@@ -408,7 +414,11 @@ class _ScanCtaCard extends StatelessWidget {
 
 class _AskHastVedaCard extends StatelessWidget {
   final bool isDark;
-  const _AskHastVedaCard({required this.isDark});
+  final bool payPerQuestion;
+  const _AskHastVedaCard({
+    required this.isDark,
+    this.payPerQuestion = false,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -416,7 +426,7 @@ class _AskHastVedaCard extends StatelessWidget {
     final textSec = isDark
         ? AppTheme.textSecondary
         : AppTheme.textSecondaryLight;
-    final primaryColor = isDark ? AppTheme.gold : AppTheme.deepPurple;
+    final primaryColor = isDark ? AppTheme.gold : AppTheme.confetti;
 
     return GestureDetector(
       onTap: () => context.push(AppRoutes.askHastveda),
@@ -467,7 +477,9 @@ class _AskHastVedaCard extends StatelessWidget {
                   ),
                   const SizedBox(height: 3),
                   Text(
-                    '2 questions included · ₹50 per extra',
+                    payPerQuestion
+                        ? 'One question · ₹59 (₹50 + GST)'
+                        : '2 free questions each month · ₹59 after that',
                     style: GoogleFonts.outfit(fontSize: 12, color: textSec),
                   ),
                 ],
@@ -523,7 +535,7 @@ class _TodaysHighlightSection extends StatelessWidget {
         ? AppTheme.textSecondary
         : AppTheme.textSecondaryLight;
     final textMut = isDark ? AppTheme.textMuted : AppTheme.textMutedLight;
-    final primaryColor = isDark ? AppTheme.gold : AppTheme.deepPurple;
+    final primaryColor = isDark ? AppTheme.gold : AppTheme.confetti;
     final goldMutedColor = isDark
         ? AppTheme.goldMuted
         : AppTheme.goldMutedLight;
@@ -902,7 +914,7 @@ class _RecentReadingsSection extends StatelessWidget {
         ? AppTheme.textSecondary
         : AppTheme.textSecondaryLight;
     final textMut = isDark ? AppTheme.textMuted : AppTheme.textMutedLight;
-    final primaryColor = isDark ? AppTheme.gold : AppTheme.deepPurple;
+    final primaryColor = isDark ? AppTheme.gold : AppTheme.confetti;
     final goldMutedColor = isDark
         ? AppTheme.goldMuted
         : AppTheme.goldMutedLight;
@@ -1218,7 +1230,7 @@ class _PremiumBanner extends StatelessWidget {
     final textSec = isDark
         ? AppTheme.textSecondary
         : AppTheme.textSecondaryLight;
-    final primaryColor = isDark ? AppTheme.gold : AppTheme.deepPurple;
+    final primaryColor = isDark ? AppTheme.gold : AppTheme.confetti;
 
     return GestureDetector(
       onTap: onTap,

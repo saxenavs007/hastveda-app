@@ -63,7 +63,7 @@ class LifeLinesBreakdownWidget extends StatelessWidget {
       score: 88,
       descEn: 'Career trajectory rising sharply',
       descHi: 'करियर का मार्ग तेजी से ऊपर जा रहा है',
-      color: AppTheme.deepPurple,
+      color: AppTheme.confetti,
     ),
   ];
 

@@ -31,6 +31,7 @@ import '../presentation/premium_screens/premium_content_screens.dart';
 import '../presentation/admin_screen/admin_discount_dashboard.dart';
 import '../presentation/admin_screen/admin_reviews_dashboard.dart';
 import '../presentation/ask_hastveda_screen/ask_hastveda_screen.dart';
+import '../presentation/insight_preview_screen/insight_preview_screen.dart';
 import '../presentation/remedies_screen/remedies_screen.dart';
 
 class AppRoutes {
@@ -78,6 +79,7 @@ class AppRoutes {
   static const String adminDiscountDashboard = '/admin-discount-dashboard';
   static const String adminReviewsDashboard = '/admin-reviews-dashboard';
   static const String askHastveda = '/ask-hastveda';
+  static const String insightPreview = '/insight-preview';
   static const String remedies = '/remedies';
 }
 
@@ -148,6 +150,51 @@ bool _hasActiveSession() {
 /// user. Guest scanning was removed for this reason; this guard also catches
 /// the case where a session expired while the app was open. The originating
 /// location is carried through so Login can return the user here afterwards.
+/// Root navigator. Full-screen reading routes use this so a push from inside
+/// a shell tab covers the shell instead of getting trapped in a branch.
+final GlobalKey<NavigatorState> rootNavigatorKey = GlobalKey<NavigatorState>();
+
+bool _isHomeLocation(Uri uri) {
+  return uri.path == AppRoutes.homeScreen ||
+      uri.fragment == AppRoutes.homeScreen;
+}
+
+/// Opens the main Home tab.
+///
+/// `pop()` throws [GoError] when the reading was opened with `go` (nothing
+/// under it). That exception was aborting the Home action, so this navigates
+/// with `go` first. A `go` to the current URL is ignored, which is what
+/// happens when a scan page was pushed while the location was already Home —
+/// those pages are popped afterwards.
+void goToHome() {
+  final uri = appRouter.routerDelegate.currentConfiguration.uri;
+  if (!_isHomeLocation(uri)) {
+    appRouter.go(AppRoutes.homeScreen);
+    return;
+  }
+  var guard = 0;
+  while (guard < 6) {
+    guard++;
+    try {
+      if (!appRouter.canPop()) break;
+      appRouter.pop();
+    } catch (_) {
+      break;
+    }
+  }
+}
+
+/// Pops one page when the router can actually pop. Otherwise opens Home.
+void popOrHome() {
+  try {
+    if (appRouter.canPop()) {
+      appRouter.pop();
+      return;
+    }
+  } catch (_) {}
+  goToHome();
+}
+
 String? _requireAccountForScan(BuildContext context, GoRouterState state) {
   if (_hasActiveSession()) return null;
   return Uri(
@@ -157,22 +204,26 @@ String? _requireAccountForScan(BuildContext context, GoRouterState state) {
 }
 
 final GoRouter appRouter = GoRouter(
+  navigatorKey: rootNavigatorKey,
   initialLocation: AppRoutes.initial,
   routes: [
     // Splash
     GoRoute(
       path: AppRoutes.splash,
+      parentNavigatorKey: rootNavigatorKey,
       pageBuilder: (context, state) => _fadePage(state, const SplashScreen()),
     ),
     // Onboarding
     GoRoute(
       path: AppRoutes.onboarding,
+      parentNavigatorKey: rootNavigatorKey,
       pageBuilder: (context, state) =>
           _fadePage(state, const OnboardingScreen()),
     ),
     // Login
     GoRoute(
       path: AppRoutes.login,
+      parentNavigatorKey: rootNavigatorKey,
       pageBuilder: (context, state) => _fadePage(
         state,
         LoginScreen(redirectTo: state.uri.queryParameters['redirect']),
@@ -181,6 +232,7 @@ final GoRouter appRouter = GoRouter(
     // Premium Paywall
     GoRoute(
       path: AppRoutes.premiumPaywall,
+      parentNavigatorKey: rootNavigatorKey,
       pageBuilder: (context, state) {
         final locale = state.uri.queryParameters['locale'] ?? 'en';
         final returnRoute = state.uri.queryParameters['return'];
@@ -193,6 +245,7 @@ final GoRouter appRouter = GoRouter(
     // Couple Reading
     GoRoute(
       path: AppRoutes.coupleReading,
+      parentNavigatorKey: rootNavigatorKey,
       pageBuilder: (context, state) {
         final locale = state.uri.queryParameters['locale'] ?? 'en';
         return _slidePage(state, CoupleReadingScreen(locale: locale));
@@ -201,6 +254,7 @@ final GoRouter appRouter = GoRouter(
     // Couple Reading Result
     GoRoute(
       path: AppRoutes.coupleReadingResult,
+      parentNavigatorKey: rootNavigatorKey,
       pageBuilder: (context, state) {
         final extra = state.extra as Map<String, dynamic>? ?? {};
         final locale = extra['locale'] as String? ?? 'en';
@@ -222,6 +276,7 @@ final GoRouter appRouter = GoRouter(
     // Couple Reading History
     GoRoute(
       path: AppRoutes.coupleReadingHistory,
+      parentNavigatorKey: rootNavigatorKey,
       pageBuilder: (context, state) {
         final locale = state.uri.queryParameters['locale'] ?? 'en';
         return _slidePage(state, CoupleReadingHistoryScreen(locale: locale));
@@ -230,6 +285,7 @@ final GoRouter appRouter = GoRouter(
     // Detailed Report
     GoRoute(
       path: AppRoutes.detailedReport,
+      parentNavigatorKey: rootNavigatorKey,
       pageBuilder: (context, state) {
         final locale = state.uri.queryParameters['locale'] ?? 'en';
         final extra = state.extra as Map<String, dynamic>? ?? {};
@@ -248,6 +304,7 @@ final GoRouter appRouter = GoRouter(
     // Report History
     GoRoute(
       path: AppRoutes.reportHistory,
+      parentNavigatorKey: rootNavigatorKey,
       pageBuilder: (context, state) {
         final locale = state.uri.queryParameters['locale'] ?? 'en';
         return _slidePage(state, ReportHistoryScreen(locale: locale));
@@ -256,23 +313,20 @@ final GoRouter appRouter = GoRouter(
     // Profile
     GoRoute(
       path: AppRoutes.profile,
+      parentNavigatorKey: rootNavigatorKey,
       pageBuilder: (context, state) => _slidePage(state, const ProfileScreen()),
     ),
     // Settings
     GoRoute(
       path: AppRoutes.settings,
+      parentNavigatorKey: rootNavigatorKey,
       pageBuilder: (context, state) =>
           _slidePage(state, const SettingsScreen()),
-    ),
-    // Notifications
-    GoRoute(
-      path: AppRoutes.notifications,
-      pageBuilder: (context, state) =>
-          _slidePage(state, const NotificationsScreen()),
     ),
     // Palm Analysis
     GoRoute(
       path: AppRoutes.palmAnalysis,
+      parentNavigatorKey: rootNavigatorKey,
       pageBuilder: (context, state) {
         final locale = state.uri.queryParameters['locale'] ?? 'en';
         final extra = state.extra as Map<String, dynamic>?;
@@ -292,6 +346,7 @@ final GoRouter appRouter = GoRouter(
     // Palm Profile
     GoRoute(
       path: AppRoutes.palmProfile,
+      parentNavigatorKey: rootNavigatorKey,
       pageBuilder: (context, state) {
         final locale = state.uri.queryParameters['locale'] ?? 'en';
         return _slidePage(state, PalmProfileScreen(locale: locale));
@@ -300,6 +355,7 @@ final GoRouter appRouter = GoRouter(
     // Life Line
     GoRoute(
       path: AppRoutes.lifeLine,
+      parentNavigatorKey: rootNavigatorKey,
       pageBuilder: (context, state) {
         final locale = state.uri.queryParameters['locale'] ?? 'en';
         return _slidePage(
@@ -311,6 +367,7 @@ final GoRouter appRouter = GoRouter(
     // Heart Line
     GoRoute(
       path: AppRoutes.heartLine,
+      parentNavigatorKey: rootNavigatorKey,
       pageBuilder: (context, state) {
         final locale = state.uri.queryParameters['locale'] ?? 'en';
         return _slidePage(
@@ -322,6 +379,7 @@ final GoRouter appRouter = GoRouter(
     // Head Line
     GoRoute(
       path: AppRoutes.headLine,
+      parentNavigatorKey: rootNavigatorKey,
       pageBuilder: (context, state) {
         final locale = state.uri.queryParameters['locale'] ?? 'en';
         return _slidePage(
@@ -333,6 +391,7 @@ final GoRouter appRouter = GoRouter(
     // Fate Line
     GoRoute(
       path: AppRoutes.fateLine,
+      parentNavigatorKey: rootNavigatorKey,
       pageBuilder: (context, state) {
         final locale = state.uri.queryParameters['locale'] ?? 'en';
         return _slidePage(
@@ -344,6 +403,7 @@ final GoRouter appRouter = GoRouter(
     // Sun Line
     GoRoute(
       path: AppRoutes.sunLine,
+      parentNavigatorKey: rootNavigatorKey,
       pageBuilder: (context, state) {
         final locale = state.uri.queryParameters['locale'] ?? 'en';
         return _slidePage(
@@ -355,6 +415,7 @@ final GoRouter appRouter = GoRouter(
     // Mercury Line
     GoRoute(
       path: AppRoutes.mercuryLine,
+      parentNavigatorKey: rootNavigatorKey,
       pageBuilder: (context, state) {
         final locale = state.uri.queryParameters['locale'] ?? 'en';
         return _slidePage(
@@ -366,6 +427,7 @@ final GoRouter appRouter = GoRouter(
     // Marriage Indicators
     GoRoute(
       path: AppRoutes.marriageIndicators,
+      parentNavigatorKey: rootNavigatorKey,
       pageBuilder: (context, state) {
         final locale = state.uri.queryParameters['locale'] ?? 'en';
         return _slidePage(state, MarriageIndicatorsScreen(locale: locale));
@@ -374,6 +436,7 @@ final GoRouter appRouter = GoRouter(
     // Mount Analysis
     GoRoute(
       path: AppRoutes.mountAnalysis,
+      parentNavigatorKey: rootNavigatorKey,
       pageBuilder: (context, state) {
         final locale = state.uri.queryParameters['locale'] ?? 'en';
         return _slidePage(state, MountAnalysisScreen(locale: locale));
@@ -382,6 +445,7 @@ final GoRouter appRouter = GoRouter(
     // Palm Marks
     GoRoute(
       path: AppRoutes.palmMarks,
+      parentNavigatorKey: rootNavigatorKey,
       pageBuilder: (context, state) {
         final locale = state.uri.queryParameters['locale'] ?? 'en';
         return _slidePage(state, PalmMarksScreen(locale: locale));
@@ -390,6 +454,7 @@ final GoRouter appRouter = GoRouter(
     // Personality
     GoRoute(
       path: AppRoutes.personality,
+      parentNavigatorKey: rootNavigatorKey,
       pageBuilder: (context, state) {
         final locale = state.uri.queryParameters['locale'] ?? 'en';
         return _slidePage(state, PersonalityScreen(locale: locale));
@@ -398,6 +463,7 @@ final GoRouter appRouter = GoRouter(
     // Love & Relationships
     GoRoute(
       path: AppRoutes.loveRelationships,
+      parentNavigatorKey: rootNavigatorKey,
       pageBuilder: (context, state) {
         final locale = state.uri.queryParameters['locale'] ?? 'en';
         return _slidePage(state, LoveRelationshipsScreen(locale: locale));
@@ -406,6 +472,7 @@ final GoRouter appRouter = GoRouter(
     // Wealth & Finances
     GoRoute(
       path: AppRoutes.wealthFinances,
+      parentNavigatorKey: rootNavigatorKey,
       pageBuilder: (context, state) {
         final locale = state.uri.queryParameters['locale'] ?? 'en';
         return _slidePage(state, WealthFinancesScreen(locale: locale));
@@ -414,6 +481,7 @@ final GoRouter appRouter = GoRouter(
     // Career & Business
     GoRoute(
       path: AppRoutes.careerBusiness,
+      parentNavigatorKey: rootNavigatorKey,
       pageBuilder: (context, state) {
         final locale = state.uri.queryParameters['locale'] ?? 'en';
         return _slidePage(state, CareerBusinessScreen(locale: locale));
@@ -422,6 +490,7 @@ final GoRouter appRouter = GoRouter(
     // Future Tendencies
     GoRoute(
       path: AppRoutes.futureTendencies,
+      parentNavigatorKey: rootNavigatorKey,
       pageBuilder: (context, state) {
         final locale = state.uri.queryParameters['locale'] ?? 'en';
         return _slidePage(state, FutureTendenciesScreen(locale: locale));
@@ -430,6 +499,7 @@ final GoRouter appRouter = GoRouter(
     // Reading Comparison (direct with IDs)
     GoRoute(
       path: AppRoutes.readingComparison,
+      parentNavigatorKey: rootNavigatorKey,
       pageBuilder: (context, state) {
         final locale = state.uri.queryParameters['locale'] ?? 'en';
         final extra = state.extra as Map<String, dynamic>? ?? {};
@@ -448,6 +518,7 @@ final GoRouter appRouter = GoRouter(
     // Reading Selection (entry point from history)
     GoRoute(
       path: AppRoutes.readingSelection,
+      parentNavigatorKey: rootNavigatorKey,
       pageBuilder: (context, state) {
         final locale = state.uri.queryParameters['locale'] ?? 'en';
         return _slidePage(state, ReadingSelectionScreen(locale: locale));
@@ -456,6 +527,7 @@ final GoRouter appRouter = GoRouter(
     // Reading History
     GoRoute(
       path: AppRoutes.readingHistory,
+      parentNavigatorKey: rootNavigatorKey,
       pageBuilder: (context, state) {
         final locale = state.uri.queryParameters['locale'] ?? 'en';
         return _slidePage(state, ReadingHistoryScreen(locale: locale));
@@ -464,6 +536,7 @@ final GoRouter appRouter = GoRouter(
     // Detailed Reading
     GoRoute(
       path: AppRoutes.detailedReading,
+      parentNavigatorKey: rootNavigatorKey,
       pageBuilder: (context, state) {
         final extra = state.extra as Map<String, dynamic>?;
         final locale = state.uri.queryParameters['locale'] ?? 'en';
@@ -479,56 +552,88 @@ final GoRouter appRouter = GoRouter(
     // Language Selection
     GoRoute(
       path: AppRoutes.languageSelection,
+      parentNavigatorKey: rootNavigatorKey,
       pageBuilder: (context, state) =>
           _slidePage(state, const LanguageSelectionScreen()),
     ),
     // Help & About
     GoRoute(
       path: AppRoutes.helpAbout,
+      parentNavigatorKey: rootNavigatorKey,
       pageBuilder: (context, state) =>
           _slidePage(state, const HelpAboutScreen()),
     ),
     // Privacy Policy
     GoRoute(
       path: AppRoutes.privacyPolicy,
+      parentNavigatorKey: rootNavigatorKey,
       pageBuilder: (context, state) =>
           _slidePage(state, const PrivacyPolicyScreen()),
     ),
     // Terms & Conditions
     GoRoute(
       path: AppRoutes.termsConditions,
+      parentNavigatorKey: rootNavigatorKey,
       pageBuilder: (context, state) =>
           _slidePage(state, const TermsConditionsScreen()),
     ),
     // AI Disclaimer
     GoRoute(
       path: AppRoutes.aiDisclaimer,
+      parentNavigatorKey: rootNavigatorKey,
       pageBuilder: (context, state) =>
           _slidePage(state, const AiDisclaimerScreen()),
     ),
     // Admin Discount Dashboard
     GoRoute(
       path: AppRoutes.adminDiscountDashboard,
+      parentNavigatorKey: rootNavigatorKey,
       pageBuilder: (context, state) =>
           _slidePage(state, const AdminDiscountDashboard()),
     ),
     // Admin Reviews Dashboard
     GoRoute(
       path: AppRoutes.adminReviewsDashboard,
+      parentNavigatorKey: rootNavigatorKey,
       pageBuilder: (context, state) =>
           _slidePage(state, const AdminReviewsDashboard()),
     ),
     // Ask HastVeda
     GoRoute(
       path: AppRoutes.askHastveda,
+      parentNavigatorKey: rootNavigatorKey,
       pageBuilder: (context, state) {
         final locale = state.uri.queryParameters['locale'] ?? 'en';
-        return _slidePage(state, AskHastVedaScreen(locale: locale));
+        final question = state.uri.queryParameters['question'];
+        final startPayment = state.uri.queryParameters['pay'] == '1';
+        return _slidePage(
+          state,
+          AskHastVedaScreen(
+            locale: locale,
+            initialQuestion: question,
+            startPayment: startPayment,
+          ),
+        );
       },
     ),
-    // Remedies
+    // Insight teaser before a paid question
+    GoRoute(
+      path: AppRoutes.insightPreview,
+      parentNavigatorKey: rootNavigatorKey,
+      pageBuilder: (context, state) {
+        return _slidePage(
+          state,
+          InsightPreviewScreen(
+            title: state.uri.queryParameters['title'],
+            teaser: state.uri.queryParameters['teaser'],
+            question: state.uri.queryParameters['question'],
+          ),
+        );
+      },
+    ),
     GoRoute(
       path: AppRoutes.remedies,
+      parentNavigatorKey: rootNavigatorKey,
       pageBuilder: (context, state) {
         final locale = state.uri.queryParameters['locale'] ?? 'en';
         return _slidePage(state, RemediesScreen(locale: locale));
@@ -564,7 +669,9 @@ final GoRouter appRouter = GoRouter(
           routes: [
             GoRoute(
               path: AppRoutes.predictionsScreen,
-              builder: (context, state) => const PredictionsScreen(),
+              builder: (context, state) => PredictionsScreen(
+                initialTab: state.uri.queryParameters['tab'],
+              ),
             ),
           ],
         ),
@@ -583,6 +690,15 @@ final GoRouter appRouter = GoRouter(
             GoRoute(
               path: '/profile-tab',
               builder: (context, state) => const ProfileScreen(),
+            ),
+          ],
+        ),
+        // Branch 5: Daily engagement alerts
+        StatefulShellBranch(
+          routes: [
+            GoRoute(
+              path: AppRoutes.notifications,
+              builder: (context, state) => const NotificationsScreen(),
             ),
           ],
         ),

@@ -1,6 +1,6 @@
 // HastVeda PDF Export Edge Function
 // Generates a branded HastVeda PDF from SAVED report data in Supabase.
-// Supports: detailed_report | couple_reading
+// Supports: detailed_report | couple_reading | palm_reading
 // Security: Reads data server-side, enforces entitlement, never exposes Gemini key.
 // Hindi support: Fetches Noto Sans Devanagari font for correct Unicode rendering.
 
@@ -761,6 +761,126 @@ async function buildCoupleReadingPdf(
   return bytes;
 }
 
+function printableReading(preferred: string, fallback: string): string {
+  const source = preferred?.trim() ? preferred : fallback;
+  if (!source) return "";
+  if (/[^\u0000-\u00ff]/.test(source)) {
+    return (fallback || "").replace(/[^\u0000-\u00ff]/g, " ").trim();
+  }
+  return source;
+}
+
+async function buildPalmReadingPdf(
+  row: any,
+  locale: string,
+  hasPremium: boolean,
+): Promise<Uint8Array> {
+  const isHindi = locale === "hi" || locale === "hi-Latn";
+  const pdfDoc = await PDFDocument.create();
+  const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+  const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+  let page = pdfDoc.addPage([PAGE_W, PAGE_H]);
+  let y = PAGE_H - 56;
+
+  const newPage = () => {
+    page = pdfDoc.addPage([PAGE_W, PAGE_H]);
+    y = PAGE_H - 56;
+  };
+  const ensure = (needed: number) => {
+    if (y < needed) newPage();
+  };
+  const write = (text: string, size = 10, color = BRAND.text) => {
+    for (const line of wrapText(text, 88)) {
+      ensure(36);
+      page.drawText(line, { x: MARGIN, y, size, font, color });
+      y -= size + 4;
+    }
+    y -= 6;
+  };
+  const section = (title: string, body: string) => {
+    if (!body.trim()) return;
+    ensure(64);
+    page.drawText(title.slice(0, 70), {
+      x: MARGIN,
+      y,
+      size: 13,
+      font: boldFont,
+      color: BRAND.primaryDark,
+    });
+    y -= 18;
+    write(body);
+  };
+  const pick = (en: string, hi: string) =>
+    printableReading(isHindi ? hi : en, en);
+
+  page.drawText("HastVeda Palm Reading", {
+    x: MARGIN,
+    y,
+    size: 20,
+    font: boldFont,
+    color: BRAND.primaryDark,
+  });
+  y -= 22;
+  write(
+    `Score ${row.overall_score ?? ""}  |  ${new Date().toLocaleDateString("en-IN")}`,
+    10,
+    BRAND.subtext,
+  );
+  if (isHindi) {
+    write(
+      "This PDF uses the English reading so every character prints. The Hindi reading is in the app.",
+      9,
+      BRAND.disclaimer,
+    );
+  }
+
+  section("Overall reading", pick(row.summary || "", row.summary_hi || ""));
+  section(
+    "Today's insight",
+    pick(row.daily_insight_en || "", row.daily_insight_hi || ""),
+  );
+
+  const blocks: Array<[string, any, string, string, string]> = [
+    ["Personality", row.personality_analysis, "interpretation_en", "interpretation_hi", "is_premium_locked"],
+    ["Love and relationships", row.love_analysis, "interpretation_en", "interpretation_hi", "is_premium_locked"],
+    ["Life path", row.life_analysis, "interpretation_en", "interpretation_hi", "is_premium_locked"],
+    ["Health", row.health_analysis, "interpretation_en", "interpretation_hi", "is_premium_locked"],
+    ["Career", row.career_analysis, "interpretation_en", "interpretation_hi", "is_premium_locked"],
+    ["Wealth", row.wealth_analysis, "interpretation_en", "interpretation_hi", "is_premium_locked"],
+  ];
+  for (const [title, block, enKey, hiKey, lockKey] of blocks) {
+    if (!block) continue;
+    if (!hasPremium && block[lockKey]) continue;
+    section(title, pick(block[enKey] || "", block[hiKey] || ""));
+  }
+
+  const personality = row.personality_analysis || {};
+  if (hasPremium || !personality.future_tendencies_locked) {
+    section(
+      "5-10 year outlook",
+      pick(
+        personality.future_tendencies_en || "",
+        personality.future_tendencies_hi || "",
+      ),
+    );
+  }
+  if (hasPremium || !personality.remedies_locked) {
+    section(
+      "Vedic remedies",
+      pick(personality.remedies_en || "", personality.remedies_hi || ""),
+    );
+  }
+
+  ensure(80);
+  write(
+    "This reading is traditional palmistry for reflection. It is not medical, legal, or financial advice.",
+    9,
+    BRAND.disclaimer,
+  );
+
+  return await pdfDoc.save();
+}
+
 // ── Main handler ──────────────────────────────────────────────────────────────
 serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
@@ -812,7 +932,7 @@ serve(async (req: Request) => {
 
     // ── Entitlement check ─────────────────────────────────────────────────────
     const { data: entitlements } = await serviceClient
-      .from("user_entitlements")
+      .from("entitlements")
       .select("entitlement_type, is_active, expires_at")
       .eq("user_id", user.id)
       .eq("is_active", true);
@@ -897,6 +1017,32 @@ serve(async (req: Request) => {
       const compatData = { ...coupleRow, ...(coupleRow.compatibility_data || {}) };
       pdfBytes = await buildCoupleReadingPdf(compatData, locale);
       filename = `hastveda-couple-reading-${new Date().toISOString().split("T")[0]}.pdf`;
+
+    } else if (reportType === "palm_reading") {
+      const analysisId = body.analysis_id as string | undefined;
+      if (!analysisId) {
+        return new Response(JSON.stringify({ error: "analysis_id is required for palm_reading" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const { data: analysisRow, error: analysisError } = await serviceClient
+        .from("palm_analysis")
+        .select("*")
+        .eq("id", analysisId)
+        .eq("user_id", user.id)
+        .maybeSingle();
+
+      if (analysisError || !analysisRow) {
+        return new Response(JSON.stringify({ error: "Reading not found or access denied." }), {
+          status: 404,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      pdfBytes = await buildPalmReadingPdf(analysisRow, locale, hasPremium);
+      filename = `hastveda-palm-reading-${new Date().toISOString().split("T")[0]}.pdf`;
 
     } else {
       return new Response(JSON.stringify({ error: "Invalid report_type" }), {

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_tts/flutter_tts.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
@@ -6,9 +7,11 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../routes/app_routes.dart';
 import '../../services/analytics_service.dart';
+import '../../services/indian_tts.dart';
 import '../../services/entitlement_notifier.dart';
 import '../../services/entitlement_service.dart';
 import '../../services/locale_provider.dart';
+import '../../services/pdf_export_service.dart';
 import '../../theme/app_theme.dart';
 
 class PalmAnalysisScreen extends StatefulWidget {
@@ -33,15 +36,32 @@ class _PalmAnalysisScreenState extends State<PalmAnalysisScreen> {
   Map<String, dynamic>? _loadedData;
   bool _isLoadingFromDb = false;
 
+  /// PopScope blocks route removal while this is false. Home/back sets it
+  /// true and navigates on the next frame, otherwise `go` is vetoed and the
+  /// reading stays on screen.
+  bool _allowPop = false;
+
   /// Whether the signed-in user holds Premium. Locks are `policy && !premium`,
   /// so a Premium user never sees a lock and a free user always sees the same
   /// locks regardless of what the AI wrote into the analysis row.
   bool _hasPremium = false;
+  bool _isSpeaking = false;
+  bool _isExportingPdf = false;
+  final FlutterTts _tts = FlutterTts();
 
   @override
   void initState() {
     super.initState();
     _locale = widget.locale;
+    _tts.setCompletionHandler(() {
+      if (mounted) setState(() => _isSpeaking = false);
+    });
+    _tts.setCancelHandler(() {
+      if (mounted) setState(() => _isSpeaking = false);
+    });
+    _tts.setErrorHandler((_) {
+      if (mounted) setState(() => _isSpeaking = false);
+    });
     analytics.track(
       HastVedaEvents.readingViewed,
       properties: {
@@ -75,6 +95,10 @@ class _PalmAnalysisScreenState extends State<PalmAnalysisScreen> {
     final providerLocale = context.watch<LocaleProvider>().languageCode;
     if (_locale != providerLocale) {
       _locale = providerLocale;
+      if (_isSpeaking) {
+        _isSpeaking = false;
+        _tts.stop();
+      }
     }
     // Premium granted while this route is under the paywall.
     if (context.watch<EntitlementNotifier>().isPremium) {
@@ -134,6 +158,8 @@ class _PalmAnalysisScreenState extends State<PalmAnalysisScreen> {
       'daily_insight': record['daily_insight_en'] ?? '',
       'daily_insight_en': record['daily_insight_en'] ?? '',
       'daily_insight_hi': record['daily_insight_hi'] ?? '',
+      'remedies_en': pa['remedies_en'] ?? '',
+      'remedies_hi': pa['remedies_hi'] ?? '',
       'confidence_note': null,
       'confidence_note_en': null,
       'confidence_note_hi': null,
@@ -208,6 +234,108 @@ class _PalmAnalysisScreenState extends State<PalmAnalysisScreen> {
         'locked': pa['future_tendencies_locked'] ?? true,
       },
     };
+  }
+
+  String get _remediesText {
+    if (_isHindi) {
+      final hi = _data['remedies_hi'] as String? ?? '';
+      if (hi.isNotEmpty) return hi;
+    }
+    return _data['remedies_en'] as String? ?? '';
+  }
+
+  @override
+  void dispose() {
+    _tts.stop();
+    super.dispose();
+  }
+
+  String _readingScript() {
+    final parts = <String>[];
+    void add(String title, String body) {
+      final text = body.trim();
+      if (text.isEmpty) return;
+      parts.add(title.trim().isEmpty ? text : '$title. $text');
+    }
+
+    add(_isHindi ? 'हस्तरेखा विश्लेषण' : 'Palm Analysis', _getSummary());
+    final traits = _getKeyTraits();
+    if (traits.isNotEmpty) {
+      add(_isHindi ? 'मुख्य लक्षण' : 'Key traits', traits.join(', '));
+    }
+    add(_isHindi ? 'आज की अंतर्दृष्टि' : 'Daily insight', _getDailyInsight());
+
+    const sections = [
+      'personality',
+      'love_relationships',
+      'life_path',
+      'health',
+      'career',
+      'wealth',
+      'future_tendencies',
+    ];
+    for (final key in sections) {
+      if (_isLocked(key)) continue;
+      final cat = _data[key];
+      final title = cat is Map
+          ? (_isHindi
+                ? (cat['title_hi'] ?? cat['title'] ?? '')
+                : (cat['title_en'] ?? cat['title'] ?? ''))
+          : '';
+      add('$title', _getCategoryContent(key));
+    }
+    add(_isHindi ? 'उपाय' : 'Remedies', _remediesText);
+    return parts.join('\n\n');
+  }
+
+  Future<void> _speakReading() async {
+    if (_isSpeaking) {
+      await _tts.stop();
+      if (mounted) setState(() => _isSpeaking = false);
+      return;
+    }
+    final script = _readingScript();
+    if (script.isEmpty) return;
+    try {
+      await _tts.awaitSpeakCompletion(true);
+      await IndianTts.apply(_tts, hindi: _isHindi);
+      if (!mounted) return;
+      setState(() => _isSpeaking = true);
+      await _tts.speak(script);
+      if (mounted) setState(() => _isSpeaking = false);
+    } catch (e) {
+      debugPrint('Reading TTS failed: $e');
+      if (mounted) setState(() => _isSpeaking = false);
+    }
+  }
+
+  Future<void> _downloadReadingPdf() async {
+    final analysisId = _data['analysis_id'] as String?;
+    if (analysisId == null || analysisId.isEmpty || _isExportingPdf) return;
+    setState(() => _isExportingPdf = true);
+    final result = await PdfExportService.instance.exportPalmReading(
+      analysisId: analysisId,
+      locale: _locale,
+    );
+    if (!mounted) return;
+    setState(() => _isExportingPdf = false);
+    final messenger = ScaffoldMessenger.of(context);
+    if (result.success) {
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(_isHindi ? 'पठन डाउनलोड हो गया' : 'Reading downloaded'),
+        ),
+      );
+    } else {
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            result.errorMessage ??
+                (_isHindi ? 'PDF नहीं बन सका' : 'Could not create the PDF'),
+          ),
+        ),
+      );
+    }
   }
 
   bool get _isHindi => _locale == 'hi';
@@ -325,11 +453,15 @@ class _PalmAnalysisScreenState extends State<PalmAnalysisScreen> {
     final cameFromHistory =
         widget.analysisData == null && widget.analysisId != null;
 
-    if (cameFromHistory && context.canPop()) {
-      context.pop();
-      return;
-    }
-    context.go(AppRoutes.homeScreen);
+    setState(() => _allowPop = true);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      if (cameFromHistory) {
+        popOrHome();
+        return;
+      }
+      goToHome();
+    });
   }
 
   @override
@@ -339,7 +471,7 @@ class _PalmAnalysisScreenState extends State<PalmAnalysisScreen> {
 
     if (_isLoadingFromDb) {
       return PopScope(
-        canPop: false,
+        canPop: _allowPop,
         onPopInvokedWithResult: (didPop, _) {
           if (!didPop) _handleBack();
         },
@@ -359,6 +491,13 @@ class _PalmAnalysisScreenState extends State<PalmAnalysisScreen> {
               icon: const Icon(Icons.arrow_back_ios_new_rounded),
               onPressed: _handleBack,
             ),
+            actions: [
+              IconButton(
+                tooltip: _isHindi ? 'पढ़कर सुनाएँ' : 'Listen',
+                onPressed: null,
+                icon: const Icon(Icons.volume_up_rounded),
+              ),
+            ],
           ),
           body: const Center(
             child: CircularProgressIndicator(color: AppTheme.primary),
@@ -378,11 +517,10 @@ class _PalmAnalysisScreenState extends State<PalmAnalysisScreen> {
 
     return PopScope(
       // Intercept the Android system back button so it routes through the same
-      // deterministic handler as the AppBar arrow. Without this, the OS-level
-      // back gesture calls Navigator.maybePop directly and hits the same broken
-      // shell-branch stack that made "Rocket's" earlier fix ineffective in the
-      // release APK.
-      canPop: false,
+      // deterministic handler as the AppBar arrow. canPop stays false until
+      // that handler runs; otherwise the route refuses to leave and Home looks
+      // stuck.
+      canPop: _allowPop,
       onPopInvokedWithResult: (didPop, _) {
         if (!didPop) _handleBack();
       },
@@ -424,6 +562,27 @@ class _PalmAnalysisScreenState extends State<PalmAnalysisScreen> {
           onPressed: _handleBack,
         ),
         actions: [
+          IconButton(
+            tooltip: _isHindi
+                ? (_isSpeaking ? 'रोकें' : 'पढ़कर सुनाएँ')
+                : (_isSpeaking ? 'Stop' : 'Listen'),
+            onPressed: _speakReading,
+            icon: Icon(
+              _isSpeaking ? Icons.stop_circle_rounded : Icons.volume_up_rounded,
+            ),
+          ),
+          if (_hasRealData)
+            IconButton(
+              tooltip: _isHindi ? 'PDF डाउनलोड' : 'Download PDF',
+              onPressed: _isExportingPdf ? null : _downloadReadingPdf,
+              icon: _isExportingPdf
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.picture_as_pdf_outlined),
+            ),
           if (_hasRealData)
             Padding(
               padding: const EdgeInsets.only(right: 12),
@@ -474,12 +633,19 @@ class _PalmAnalysisScreenState extends State<PalmAnalysisScreen> {
               keyTraits: keyTraits,
               isHindi: _isHindi,
               isRealData: _hasRealData,
+              isSpeaking: _isSpeaking,
+              onSpeak: _speakReading,
             ),
             const SizedBox(height: 16),
 
             // Daily insight (if available)
             if (dailyInsight.isNotEmpty)
               _DailyInsightCard(insight: dailyInsight, isHindi: _isHindi),
+
+            if (_remediesText.isNotEmpty) ...[
+              const SizedBox(height: 16),
+              _RemediesCard(text: _remediesText, isHindi: _isHindi),
+            ],
 
             const SizedBox(height: 20),
 
@@ -651,6 +817,16 @@ class _PalmAnalysisScreenState extends State<PalmAnalysisScreen> {
             ),
             const SizedBox(height: 24),
 
+            if (!_hasPremium) ...[
+              _PayPerQuestionCard(
+                isHindi: _isHindi,
+                onTap: () => context.push(
+                  '${AppRoutes.askHastveda}?locale=$_locale',
+                ),
+              ),
+              const SizedBox(height: 16),
+            ],
+
             // View Palm Profile
             SizedBox(
               width: double.infinity,
@@ -798,6 +974,47 @@ class _DailyInsightCard extends StatelessWidget {
   }
 }
 
+class _RemediesCard extends StatelessWidget {
+  final String text;
+  final bool isHindi;
+  const _RemediesCard({required this.text, required this.isHindi});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 4),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFF1A1208),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppTheme.gold.withAlpha(70)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            isHindi ? 'वैदिक उपाय' : 'Vedic Remedies',
+            style: GoogleFonts.outfit(
+              fontSize: 13,
+              color: AppTheme.gold,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 10),
+          Text(
+            text,
+            style: GoogleFonts.outfit(
+              fontSize: 13,
+              color: Colors.white70,
+              height: 1.6,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 // ── Overview Card ─────────────────────────────────────────────────────────────
 
 class _OverviewCard extends StatelessWidget {
@@ -807,6 +1024,8 @@ class _OverviewCard extends StatelessWidget {
   final List<String> keyTraits;
   final bool isHindi;
   final bool isRealData;
+  final bool isSpeaking;
+  final VoidCallback? onSpeak;
 
   const _OverviewCard({
     required this.score,
@@ -815,6 +1034,8 @@ class _OverviewCard extends StatelessWidget {
     required this.keyTraits,
     required this.isHindi,
     required this.isRealData,
+    this.isSpeaking = false,
+    this.onSpeak,
   });
 
   @override
@@ -899,6 +1120,24 @@ class _OverviewCard extends StatelessWidget {
                   ],
                 ),
               ),
+              if (onSpeak != null)
+                Material(
+                  color: AppTheme.primary.withAlpha(28),
+                  shape: const CircleBorder(),
+                  child: IconButton(
+                    tooltip: isSpeaking
+                        ? (isHindi ? 'रोकें' : 'Stop')
+                        : (isHindi ? 'पढ़कर सुनाएँ' : 'Listen'),
+                    onPressed: onSpeak,
+                    icon: Icon(
+                      isSpeaking
+                          ? Icons.stop_circle_rounded
+                          : Icons.volume_up_rounded,
+                      color: AppTheme.primary,
+                      size: 28,
+                    ),
+                  ),
+                ),
             ],
           ),
           const SizedBox(height: 14),
@@ -1267,6 +1506,74 @@ class _InsightCard extends StatelessWidget {
                 size: 20,
               ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _PayPerQuestionCard extends StatelessWidget {
+  final bool isHindi;
+  final VoidCallback onTap;
+
+  const _PayPerQuestionCard({required this.isHindi, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: Ink(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: AppTheme.primary.withAlpha(120)),
+            gradient: LinearGradient(
+              colors: [
+                AppTheme.primary.withAlpha(28),
+                AppTheme.gold.withAlpha(18),
+              ],
+            ),
+          ),
+          child: Row(
+            children: [
+              const Icon(
+                Icons.chat_bubble_outline_rounded,
+                color: AppTheme.primary,
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      isHindi
+                          ? 'इस रीडिंग पर एक सवाल पूछें'
+                          : 'Ask one question about this reading',
+                      style: GoogleFonts.outfit(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                        color: Colors.white,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      isHindi
+                          ? '₹59 (₹50 + GST) · सब्सक्रिप्शन की ज़रूरत नहीं'
+                          : '₹59 (₹50 + GST) · no subscription needed',
+                      style: GoogleFonts.outfit(
+                        fontSize: 12,
+                        color: Colors.white70,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const Icon(Icons.arrow_forward_rounded, color: AppTheme.primary),
+            ],
+          ),
         ),
       ),
     );

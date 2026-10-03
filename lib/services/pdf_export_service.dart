@@ -11,6 +11,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../config/supabase_config.dart';
 import './error_logger.dart';
 // ignore: uri_does_not_exist
 import 'pdf_export_stub.dart'
@@ -80,6 +81,22 @@ class PdfExportService {
     );
   }
 
+  /// Export the saved palm reading as a PDF.
+  Future<PdfExportResult> exportPalmReading({
+    required String analysisId,
+    required String locale,
+  }) async {
+    return _export(
+      body: {
+        'report_type': 'palm_reading',
+        'analysis_id': analysisId,
+        'locale': locale,
+      },
+      filename: 'hastveda-palm-reading-${_dateStamp()}.pdf',
+      share: false,
+    );
+  }
+
   /// Share a Detailed Report PDF via Android share sheet.
   Future<PdfExportResult> shareDetailedReport({
     required String reportId,
@@ -127,7 +144,7 @@ class PdfExportService {
         return PdfExportResult.failure('Not authenticated. Please sign in.');
       }
 
-      final supabaseUrl = const String.fromEnvironment('SUPABASE_URL');
+      final supabaseUrl = SupabaseConfig.url;
       final functionUrl = '$supabaseUrl/functions/v1/pdf-export';
 
       final response = await callFunctionRaw(
