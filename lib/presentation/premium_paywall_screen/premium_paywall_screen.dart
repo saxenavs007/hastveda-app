@@ -207,15 +207,9 @@ class _PremiumPaywallScreenState extends State<PremiumPaywallScreen>
         if (mounted) {
           _showPaymentSuccess();
         }
-      } else if (checkoutResult == false) {
-        // verifyPayment returned false — could be entitlement_grant_failed
-        if (mounted) {
-          _showError(
-            'Payment received but Premium activation failed. Please tap "Restore Purchases" or contact support.',
-          );
-        }
       }
-      // checkoutResult == null means user cancelled or timed out — no action needed
+      // false: checkout closed or the charge was not confirmed. Specific
+      // failures are already reported through onError. null: hosted redirect.
     } catch (e) {
       if (mounted) {
         _showError('Payment failed. Please try again.');

@@ -15,6 +15,7 @@ import '../../theme/app_theme.dart';
 import '../../widgets/app_bar_widget.dart';
 import '../../widgets/custom_icon_widget.dart';
 import '../../widgets/hastveda_error_widget.dart';
+import '../../widgets/luxury_surface.dart';
 import '../../widgets/premium_status_widget.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -131,11 +132,12 @@ class _HomeScreenState extends State<HomeScreen> {
         ? AppTheme.surfaceElevated
         : AppTheme.surfaceElevatedLight;
     final outline = isDark ? AppTheme.outlineDark : AppTheme.outlineLight;
-    final primaryColor = isDark ? AppTheme.gold : AppTheme.confetti;
+    final primaryColor = AppTheme.gold;
 
     return Scaffold(
       backgroundColor: bg,
-      body: Column(
+      body: LuxuryBackdrop(
+        child: Column(
         children: [
           AppBarWidget(
             title: 'HastVeda',
@@ -171,9 +173,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   width: 36,
                   height: 36,
                   decoration: BoxDecoration(
-                    gradient: isDark
-                        ? AppTheme.goldGradient
-                        : AppTheme.purpleGradientLight,
+                    gradient: AppTheme.goldGradient,
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Center(
@@ -218,11 +218,21 @@ class _HomeScreenState extends State<HomeScreen> {
                               children: [
                                 const SizedBox(height: 20),
                                 Text(
-                                  '${_greeting(s)}, ${_getUserName()} 🌟',
+                                  _greeting(s),
                                   style: GoogleFonts.outfit(
-                                    fontSize: 22,
-                                    fontWeight: FontWeight.w700,
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w500,
+                                    letterSpacing: 2.4,
+                                    color: AppTheme.gold,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  _getUserName(),
+                                  style: AppTheme.display(
+                                    34,
                                     color: textPri,
+                                    weight: FontWeight.w500,
                                   ),
                                 ),
                                 const SizedBox(height: 4),
@@ -293,6 +303,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
           ),
         ],
+        ),
       ),
     );
   }
@@ -344,27 +355,19 @@ class _ScanCtaCard extends StatelessWidget {
         width: double.infinity,
         padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
-          gradient: isDark
-              ? const LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [AppTheme.gold, Color(0xFFB8892A)],
-                )
-              : AppTheme.purpleGradientLight,
-          borderRadius: BorderRadius.circular(20),
+          gradient: AppTheme.goldGradient,
+          borderRadius: BorderRadius.circular(22),
           boxShadow: [
             BoxShadow(
-              color: (isDark ? AppTheme.gold : AppTheme.confetti).withAlpha(
-                60,
-              ),
-              blurRadius: 20,
-              offset: const Offset(0, 6),
+              color: AppTheme.gold.withAlpha(70),
+              blurRadius: 28,
+              offset: const Offset(0, 10),
             ),
           ],
         ),
         child: Row(
           children: [
-            const Icon(Icons.back_hand_rounded, color: Colors.white, size: 40),
+            const Icon(Icons.back_hand_rounded, color: Color(0xFF14110A), size: 36),
             const SizedBox(width: 16),
             Expanded(
               child: Column(
@@ -372,18 +375,18 @@ class _ScanCtaCard extends StatelessWidget {
                 children: [
                   Text(
                     s.scanYourPalm,
-                    style: GoogleFonts.outfit(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w800,
-                      color: Colors.white,
+                    style: AppTheme.display(
+                      26,
+                      color: const Color(0xFF14110A),
+                      weight: FontWeight.w600,
                     ),
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    'Discover your palm story with AI',
+                    'AI palm intelligence, in your hands',
                     style: GoogleFonts.outfit(
                       fontSize: 13,
-                      color: Colors.white.withAlpha(200),
+                      color: const Color(0xFF14110A).withAlpha(190),
                     ),
                   ),
                 ],
@@ -392,12 +395,12 @@ class _ScanCtaCard extends StatelessWidget {
             Container(
               padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(
-                color: Colors.white.withAlpha(40),
+                color: const Color(0xFF14110A).withAlpha(28),
                 borderRadius: BorderRadius.circular(12),
               ),
               child: const Icon(
                 Icons.arrow_forward_rounded,
-                color: Colors.white,
+                color: Color(0xFF14110A),
                 size: 20,
               ),
             ),
@@ -426,7 +429,7 @@ class _AskHastVedaCard extends StatelessWidget {
     final textSec = isDark
         ? AppTheme.textSecondary
         : AppTheme.textSecondaryLight;
-    final primaryColor = isDark ? AppTheme.gold : AppTheme.confetti;
+    final primaryColor = AppTheme.gold;
 
     return GestureDetector(
       onTap: () => context.push(AppRoutes.askHastveda),
@@ -488,9 +491,7 @@ class _AskHastVedaCard extends StatelessWidget {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
               decoration: BoxDecoration(
-                gradient: isDark
-                    ? AppTheme.goldGradient
-                    : AppTheme.purpleGradientLight,
+                gradient: AppTheme.goldGradient,
                 borderRadius: BorderRadius.circular(10),
               ),
               child: Text(
@@ -535,7 +536,7 @@ class _TodaysHighlightSection extends StatelessWidget {
         ? AppTheme.textSecondary
         : AppTheme.textSecondaryLight;
     final textMut = isDark ? AppTheme.textMuted : AppTheme.textMutedLight;
-    final primaryColor = isDark ? AppTheme.gold : AppTheme.confetti;
+    final primaryColor = AppTheme.gold;
     final goldMutedColor = isDark
         ? AppTheme.goldMuted
         : AppTheme.goldMutedLight;
@@ -574,9 +575,7 @@ class _TodaysHighlightSection extends StatelessWidget {
             const SizedBox(height: 16),
             DecoratedBox(
               decoration: BoxDecoration(
-                gradient: isDark
-                    ? AppTheme.goldGradient
-                    : AppTheme.purpleGradientLight,
+                gradient: AppTheme.goldGradient,
                 borderRadius: BorderRadius.circular(12),
               ),
               child: ElevatedButton.icon(
@@ -914,7 +913,7 @@ class _RecentReadingsSection extends StatelessWidget {
         ? AppTheme.textSecondary
         : AppTheme.textSecondaryLight;
     final textMut = isDark ? AppTheme.textMuted : AppTheme.textMutedLight;
-    final primaryColor = isDark ? AppTheme.gold : AppTheme.confetti;
+    final primaryColor = AppTheme.gold;
     final goldMutedColor = isDark
         ? AppTheme.goldMuted
         : AppTheme.goldMutedLight;
@@ -1230,7 +1229,7 @@ class _PremiumBanner extends StatelessWidget {
     final textSec = isDark
         ? AppTheme.textSecondary
         : AppTheme.textSecondaryLight;
-    final primaryColor = isDark ? AppTheme.gold : AppTheme.confetti;
+    final primaryColor = AppTheme.gold;
 
     return GestureDetector(
       onTap: onTap,
@@ -1290,9 +1289,7 @@ class _PremiumBanner extends StatelessWidget {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
               decoration: BoxDecoration(
-                gradient: isDark
-                    ? AppTheme.goldGradient
-                    : AppTheme.purpleGradientLight,
+                gradient: AppTheme.goldGradient,
                 borderRadius: BorderRadius.circular(10),
               ),
               child: Text(

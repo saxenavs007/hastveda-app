@@ -1,3 +1,5 @@
+import 'dart:ui';
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
@@ -74,12 +76,8 @@ class _AppNavigationState extends State<AppNavigation> {
     final s = AppStrings.of(localeProvider.languageCode);
     final isDark = themeProvider.isDark;
 
-    final navBg = isDark ? AppTheme.surfaceDark : AppTheme.surfaceLight;
-    final navBorder = isDark ? AppTheme.outlineDark : AppTheme.outlineLight;
-    final activeGradient = isDark
-        ? AppTheme.goldGradient
-        : AppTheme.purpleGradientLight;
-    final activeTextColor = isDark ? const Color(0xFF0A0A0F) : Colors.white;
+    final activeGradient = AppTheme.goldGradient;
+    final activeTextColor = const Color(0xFF14110A);
     final inactiveIconColor = isDark
         ? AppTheme.textMuted
         : AppTheme.textMutedLight;
@@ -97,17 +95,24 @@ class _AppNavigationState extends State<AppNavigation> {
       top: false,
       child: Padding(
         padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-        child: Container(
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(32),
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+            child: Container(
           height: 64,
           decoration: BoxDecoration(
-            color: navBg,
+            color: isDark ? const Color(0xCC101014) : const Color(0xE8FFFDF8),
             borderRadius: BorderRadius.circular(32),
-            border: Border.all(color: navBorder),
+            border: Border.all(
+              color: AppTheme.gold.withAlpha(isDark ? 80 : 50),
+            ),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withAlpha(isDark ? 100 : 30),
-                blurRadius: 24,
-                offset: const Offset(0, 8),
+                color: AppTheme.gold.withAlpha(isDark ? 36 : 18),
+                blurRadius: 28,
+                spreadRadius: -8,
+                offset: const Offset(0, 10),
               ),
             ],
           ),
@@ -155,6 +160,8 @@ class _AppNavigationState extends State<AppNavigation> {
                 ),
               );
             }),
+          ),
+        ),
           ),
         ),
       ),

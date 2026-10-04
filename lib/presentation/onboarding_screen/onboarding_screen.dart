@@ -22,7 +22,6 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
   final List<_OnboardingPage> _pages = const [
     _OnboardingPage(
-      emoji: '✋',
       title: 'Decode Your Cosmic Blueprint',
       subtitle:
           'HastVeda harnesses advanced AI to unlock the ancient wisdom inscribed in your palm lines — offering deeply personalized insights into your character, life path, and hidden destiny.',
@@ -31,7 +30,6 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           'Majestic glowing golden mystic palm against a deep cosmic nebula with subtle constellation lines',
     ),
     _OnboardingPage(
-      emoji: '🔮',
       title: 'AI-Powered Palm Analysis',
       subtitle:
           'Our proprietary AI engine meticulously analyzes your Life Line, Heart Line, Head Line, Fate Line, and more — providing interpretations deeply rooted in traditional palmistry but enhanced by modern technology.',
@@ -40,7 +38,6 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           'Futuristic glowing hand with intricate golden data lines and a biometric grid overlay',
     ),
     _OnboardingPage(
-      emoji: '💫',
       title: 'Your Personalized Daily Guidance',
       subtitle:
           'Receive daily, weekly, monthly, and yearly predictions uniquely tailored to your personal palm profile. Gain profound clarity on matters of love, career, wealth, and relationships.',
@@ -242,10 +239,11 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                       AppTheme.goldGradient.createShader(bounds),
                   child: Text(
                     'HastVeda',
-                    style: GoogleFonts.outfit(
-                      fontSize: 22,
-                      fontWeight: FontWeight.w700,
+                    style: GoogleFonts.cormorantGaramond(
+                      fontSize: 28,
+                      fontWeight: FontWeight.w600,
                       color: Colors.white,
+                      letterSpacing: 0.6,
                     ),
                   ),
                 ),
@@ -259,14 +257,12 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 }
 
 class _OnboardingPage {
-  final String emoji;
   final String title;
   final String subtitle;
   final String imageAsset;
   final String semanticLabel;
 
   const _OnboardingPage({
-    required this.emoji,
     required this.title,
     required this.subtitle,
     required this.imageAsset,
@@ -282,7 +278,6 @@ class _OnboardingPageView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final screenHeight = MediaQuery.of(context).size.height;
     // Text block sits above the bottom controls area
     final textBottomOffset = isSmall ? 160.0 : 200.0;
 
@@ -340,15 +335,11 @@ class _OnboardingPageView extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text(page.emoji, style: TextStyle(fontSize: isSmall ? 32 : 40)),
-              SizedBox(height: isSmall ? 8 : 12),
               Text(
                 page.title,
-                style: GoogleFonts.outfit(
-                  fontSize: isSmall ? 22 : 26,
-                  fontWeight: FontWeight.w800,
-                  color: AppTheme.textPrimary,
-                  height: 1.2,
+                style: AppTheme.display(
+                  isSmall ? 30 : 36,
+                  weight: FontWeight.w500,
                 ),
                 maxLines: 3,
                 overflow: TextOverflow.ellipsis,

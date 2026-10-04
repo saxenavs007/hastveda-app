@@ -5,11 +5,11 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 class AppTheme {
-  // ── Brand Core (Dark) ────────────────────────────────────────────────────
-  static const Color backgroundDark = Color(0xFF0A0A0F);
-  static const Color surfaceDark = Color(0xFF12121A);
-  static const Color surfaceElevated = Color(0xFF1A1A26);
-  static const Color outlineDark = Color(0xFF2A2A3A);
+  // ── Brand Core (Dark) — obsidian salon ───────────────────────────────────
+  static const Color backgroundDark = Color(0xFF070708);
+  static const Color surfaceDark = Color(0xFF101014);
+  static const Color surfaceElevated = Color(0xFF16161C);
+  static const Color outlineDark = Color(0xFF2C2820);
 
   // ── Brand Core (Light) — Confetti: cream, saffron, festive warmth ────────
   static const Color backgroundLight = Color(0xFFFFF6E8);
@@ -18,9 +18,10 @@ class AppTheme {
   static const Color outlineLight = Color(0xFFE8D3B0);
 
   // ── Gold Accent (Premium / Highlight) ───────────────────────────────────
-  static const Color gold = Color(0xFFD4A843);
-  static const Color goldLight = Color(0xFFEFC96A);
-  static const Color goldMuted = Color(0xFF3A2E10);
+  static const Color gold = Color(0xFFD4AF37);
+  static const Color goldLight = Color(0xFFF3E5AB);
+  static const Color goldDeep = Color(0xFF8C7322);
+  static const Color goldMuted = Color(0xFF2A2416);
   static const Color goldMutedLight = Color(0xFFFFF8E7);
 
   // ── Cyan / Blue AI Accent ───────────────────────────────────────────────
@@ -69,7 +70,7 @@ class AppTheme {
 
   // ── Gradient helpers ─────────────────────────────────────────────────────
   static const LinearGradient goldGradient = LinearGradient(
-    colors: [Color(0xFFD4A843), Color(0xFFEFC96A)],
+    colors: [Color(0xFF8C7322), Color(0xFFD4AF37), Color(0xFFF3E5AB)],
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
   );
@@ -87,10 +88,43 @@ class AppTheme {
   );
 
   static const LinearGradient darkSurfaceGradient = LinearGradient(
-    colors: [Color(0xFF12121A), Color(0xFF1A1A26)],
+    colors: [Color(0xFF14110C), Color(0xFF070708)],
     begin: Alignment.topCenter,
     end: Alignment.bottomCenter,
   );
+
+  static TextStyle display(
+    double size, {
+    Color color = textPrimary,
+    FontWeight weight = FontWeight.w500,
+    double letterSpacing = 0.2,
+  }) {
+    return GoogleFonts.cormorantGaramond(
+      fontSize: size,
+      fontWeight: weight,
+      color: color,
+      letterSpacing: letterSpacing,
+      height: 1.05,
+    );
+  }
+
+  static BoxDecoration glass({double radius = 22, bool dark = true}) {
+    return BoxDecoration(
+      color: dark ? const Color(0xB316161C) : const Color(0xE6FFFDF8),
+      borderRadius: BorderRadius.circular(radius),
+      border: Border.all(
+        color: gold.withAlpha(dark ? 70 : 50),
+      ),
+      boxShadow: [
+        BoxShadow(
+          color: gold.withAlpha(dark ? 28 : 18),
+          blurRadius: 28,
+          spreadRadius: -10,
+          offset: const Offset(0, 12),
+        ),
+      ],
+    );
+  }
 
   static const LinearGradient lightSurfaceGradient = LinearGradient(
     colors: [Color(0xFFFFFDF8), Color(0xFFFFF1D4)],
@@ -273,10 +307,10 @@ class AppTheme {
       useMaterial3: true,
       brightness: Brightness.light,
       colorScheme: const ColorScheme.light(
-        primary: confetti,
-        onPrimary: Colors.white,
-        primaryContainer: purpleMutedLight,
-        onPrimaryContainer: confettiDeep,
+        primary: gold,
+        onPrimary: Color(0xFF14110A),
+        primaryContainer: goldMutedLight,
+        onPrimaryContainer: Color(0xFF5A3A00),
         secondary: gold,
         onSecondary: Colors.white,
         secondaryContainer: goldMutedLight,
@@ -342,7 +376,7 @@ class AppTheme {
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: confetti, width: 2),
+          borderSide: const BorderSide(color: gold, width: 2),
         ),
         errorBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
@@ -353,8 +387,8 @@ class AppTheme {
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
-          backgroundColor: confetti,
-          foregroundColor: Colors.white,
+          backgroundColor: gold,
+          foregroundColor: const Color(0xFF14110A),
           elevation: 0,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
@@ -368,8 +402,8 @@ class AppTheme {
       ),
       outlinedButtonTheme: OutlinedButtonThemeData(
         style: OutlinedButton.styleFrom(
-          foregroundColor: confetti,
-          side: const BorderSide(color: confetti),
+          foregroundColor: goldDeep,
+          side: const BorderSide(color: goldDeep),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
           ),
@@ -382,7 +416,7 @@ class AppTheme {
       ),
       textButtonTheme: TextButtonThemeData(
         style: TextButton.styleFrom(
-          foregroundColor: confetti,
+          foregroundColor: goldDeep,
           textStyle: GoogleFonts.outfit(
             fontSize: 14,
             fontWeight: FontWeight.w600,
@@ -392,7 +426,7 @@ class AppTheme {
       dividerTheme: const DividerThemeData(color: outlineLight, thickness: 1),
       bottomNavigationBarTheme: const BottomNavigationBarThemeData(
         backgroundColor: surfaceLight,
-        selectedItemColor: confetti,
+        selectedItemColor: goldDeep,
         unselectedItemColor: textMutedLight,
         elevation: 0,
         type: BottomNavigationBarType.fixed,
@@ -405,7 +439,7 @@ class AppTheme {
             return GoogleFonts.outfit(
               fontSize: 11,
               fontWeight: FontWeight.w600,
-              color: confetti,
+              color: goldDeep,
             );
           }
           return GoogleFonts.outfit(
@@ -416,14 +450,14 @@ class AppTheme {
         }),
         iconTheme: WidgetStateProperty.resolveWith((states) {
           if (states.contains(WidgetState.selected)) {
-            return const IconThemeData(color: confetti, size: 22);
+            return const IconThemeData(color: goldDeep, size: 22);
           }
           return const IconThemeData(color: textMutedLight, size: 22);
         }),
       ),
       switchTheme: SwitchThemeData(
         thumbColor: WidgetStateProperty.resolveWith((states) {
-          if (states.contains(WidgetState.selected)) return confetti;
+          if (states.contains(WidgetState.selected)) return goldDeep;
           return textMutedLight;
         }),
         trackColor: WidgetStateProperty.resolveWith((states) {
@@ -441,33 +475,34 @@ class AppTheme {
   ) {
     return GoogleFonts.outfitTextTheme(
       TextTheme(
-        displayLarge: TextStyle(
-          fontSize: 32,
-          fontWeight: FontWeight.w700,
+        displayLarge: GoogleFonts.cormorantGaramond(
+          fontSize: 40,
+          fontWeight: FontWeight.w500,
+          color: primary,
+          letterSpacing: 0.2,
+        ),
+        displayMedium: GoogleFonts.cormorantGaramond(
+          fontSize: 34,
+          fontWeight: FontWeight.w500,
           color: primary,
         ),
-        displayMedium: TextStyle(
+        displaySmall: GoogleFonts.cormorantGaramond(
           fontSize: 28,
-          fontWeight: FontWeight.w700,
+          fontWeight: FontWeight.w500,
           color: primary,
         ),
-        displaySmall: TextStyle(
-          fontSize: 24,
-          fontWeight: FontWeight.w700,
+        headlineLarge: GoogleFonts.cormorantGaramond(
+          fontSize: 26,
+          fontWeight: FontWeight.w600,
           color: primary,
         ),
-        headlineLarge: TextStyle(
+        headlineMedium: GoogleFonts.cormorantGaramond(
           fontSize: 22,
           fontWeight: FontWeight.w600,
           color: primary,
         ),
-        headlineMedium: TextStyle(
+        headlineSmall: GoogleFonts.cormorantGaramond(
           fontSize: 20,
-          fontWeight: FontWeight.w600,
-          color: primary,
-        ),
-        headlineSmall: TextStyle(
-          fontSize: 18,
           fontWeight: FontWeight.w600,
           color: primary,
         ),
@@ -564,7 +599,7 @@ class AppTheme {
   }
 
   static Color primaryBrandColor(BuildContext context) {
-    return Theme.of(context).brightness == Brightness.dark ? gold : confetti;
+    return gold;
   }
 
   static Color goldMutedColor(BuildContext context) {

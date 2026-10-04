@@ -37,8 +37,10 @@ class AppBarWidget extends StatelessWidget implements PreferredSizeWidget {
 
     return Container(
       decoration: BoxDecoration(
-        color: surface,
-        border: Border(bottom: BorderSide(color: border, width: 1)),
+        color: isDark ? const Color(0xCC070708) : surface.withAlpha(230),
+        border: Border(
+          bottom: BorderSide(color: AppTheme.gold.withAlpha(isDark ? 50 : 40)),
+        ),
       ),
       child: SafeArea(
         bottom: false,
@@ -97,11 +99,11 @@ class AppBarWidget extends StatelessWidget implements PreferredSizeWidget {
                             AppTheme.goldGradient.createShader(bounds),
                         child: Text(
                           'HastVeda',
-                          style: GoogleFonts.outfit(
-                            fontSize: 20,
-                            fontWeight: FontWeight.w800,
+                          style: GoogleFonts.cormorantGaramond(
+                            fontSize: 26,
+                            fontWeight: FontWeight.w600,
                             color: Colors.white,
-                            letterSpacing: 0.5,
+                            letterSpacing: 0.4,
                           ),
                         ),
                       ),
