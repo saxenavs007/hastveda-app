@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import 'package:sizer/sizer.dart';
+import 'package:url_strategy/url_strategy.dart';
 
 import '../routes/app_routes.dart';
 import '../theme/app_theme.dart';
@@ -28,6 +29,7 @@ import './widgets/hastveda_error_widget.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  setPathUrlStrategy();
 
   // ── Global Flutter error handler ─────────────────────────────────────────
   FlutterError.onError = (FlutterErrorDetails details) {
