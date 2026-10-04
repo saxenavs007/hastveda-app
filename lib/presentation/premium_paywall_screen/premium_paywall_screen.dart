@@ -13,7 +13,7 @@ import '../../services/premium_strings.dart';
 import '../../services/supabase_service.dart';
 import '../../theme/app_theme.dart';
 
-// Conditional import for Cashfree SDK (not supported on web)
+// Web uses the Cashfree JS checkout. Android and iOS use the native SDK.
 import 'cashfree_checkout_stub.dart'
     if (dart.library.io) 'cashfree_checkout_mobile.dart';
 
@@ -105,10 +105,10 @@ class _PremiumPaywallScreenState extends State<PremiumPaywallScreen>
       return;
     }
 
-    if (kIsWeb ||
-        defaultTargetPlatform == TargetPlatform.windows ||
-        defaultTargetPlatform == TargetPlatform.linux ||
-        defaultTargetPlatform == TargetPlatform.macOS) {
+    if (!kIsWeb &&
+        (defaultTargetPlatform == TargetPlatform.windows ||
+            defaultTargetPlatform == TargetPlatform.linux ||
+            defaultTargetPlatform == TargetPlatform.macOS)) {
       _showWebNotSupported();
       return;
     }

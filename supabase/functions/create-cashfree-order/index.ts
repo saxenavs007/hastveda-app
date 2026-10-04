@@ -22,6 +22,43 @@ const ASK_QUESTION_PRICE = 50.0; // ₹50 per additional question
 const MIN_PAYABLE = 1.0; // Cashfree minimum
 const GST_RATE = 0.18; // 18% GST
 
+// Keep checkout on the browser that started the order. Only accept a return
+// URL whose origin matches the request Origin header.
+function cashfreeReturnUrl(
+  req: Request,
+  requested: unknown,
+  orderId: string,
+): string {
+  const fallback =
+    `https://palmveda4192.builtwithrocket.new?order_id=${encodeURIComponent(orderId)}`;
+  const originHeader = req.headers.get("origin");
+  if (
+    !originHeader ||
+    typeof requested !== "string" ||
+    requested.length === 0 ||
+    requested.length > 500
+  ) {
+    return fallback;
+  }
+  try {
+    const origin = new URL(originHeader);
+    const target = new URL(requested);
+    const local =
+      origin.hostname === "localhost" || origin.hostname === "127.0.0.1";
+    const httpsOk = origin.protocol === "https:" && target.protocol === "https:";
+    const localOk =
+      local && (target.protocol === "http:" || target.protocol === "https:");
+    if (target.origin !== origin.origin || !(httpsOk || localOk)) {
+      return fallback;
+    }
+    target.searchParams.set("order_id", orderId);
+    target.hash = "";
+    return target.toString();
+  } catch {
+    return fallback;
+  }
+}
+
 serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -177,7 +214,7 @@ serve(async (req: Request) => {
           customer_phone: profile.phone || "9999999999",
         },
         order_meta: {
-          return_url: `https://palmveda4192.builtwithrocket.new?order_id=${cashfreeOrderId}`,
+          return_url: cashfreeReturnUrl(req, body.return_url, cashfreeOrderId),
           notify_url: `${supabaseUrl}/functions/v1/cashfree-webhook`,
         },
         order_note: "HastVeda — Ask Question",
@@ -408,7 +445,7 @@ serve(async (req: Request) => {
         customer_phone: profile.phone || "9999999999",
       },
       order_meta: {
-        return_url: `https://palmveda4192.builtwithrocket.new?order_id=${cashfreeOrderId}`,
+        return_url: cashfreeReturnUrl(req, body.return_url, cashfreeOrderId),
         notify_url: `${supabaseUrl}/functions/v1/cashfree-webhook`,
       },
       order_note: "HastVeda Premium Access",

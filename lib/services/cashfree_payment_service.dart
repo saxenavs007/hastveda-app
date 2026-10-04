@@ -95,6 +95,7 @@ class CashfreePaymentService {
         'product_type': productType,
         if (couponCode != null && couponCode.isNotEmpty)
           'coupon_code': couponCode.trim().toUpperCase(),
+        if (kIsWeb) 'return_url': Uri.base.removeFragment().toString(),
       };
 
       final response = await _client.functions.invoke(

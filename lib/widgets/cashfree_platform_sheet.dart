@@ -4,11 +4,11 @@ import 'package:google_fonts/google_fonts.dart';
 
 import '../theme/app_theme.dart';
 
-/// Native Cashfree checkout runs on Android and iOS only.
+/// Browser checkout uses the Cashfree JS SDK. Android and iOS use the native SDK.
 bool get cashfreeCheckoutSupported =>
-    !kIsWeb &&
-    (defaultTargetPlatform == TargetPlatform.android ||
-        defaultTargetPlatform == TargetPlatform.iOS);
+    kIsWeb ||
+    defaultTargetPlatform == TargetPlatform.android ||
+    defaultTargetPlatform == TargetPlatform.iOS;
 
 Future<void> showCashfreePlatformSheet(
   BuildContext context, {
