@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="HastVeda Support — Get help with the HastVeda palm reading app." />
+  <title>Support — HastVeda</title>
+  <link rel="icon" type="image/png" href="assets/assets/hastveda-logo.png" />
+  <link rel="apple-touch-icon" href="assets/assets/hastveda-logo.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --gold-light: #f0d080; --gold-mid: #c9a84c; --gold-dark: #8b6914;
+      --bg-deep: #07070f; --bg-card: rgba(255,255,255,0.04);
+      --border-gold: rgba(201,168,76,0.2); --text-white: #f5f5f5; --text-muted: rgba(245,245,245,0.55);
+    }
+    html { scroll-behavior: smooth; }
+    body { font-family: 'Inter', sans-serif; background: var(--bg-deep); color: var(--text-white); line-height: 1.7; }
+    ::-webkit-scrollbar { width: 6px; } ::-webkit-scrollbar-track { background: var(--bg-deep); } ::-webkit-scrollbar-thumb { background: var(--gold-dark); border-radius: 3px; }
+
+    nav { position: sticky; top: 0; z-index: 100; display: flex; align-items: center; justify-content: space-between; padding: 16px 48px; background: rgba(7,7,15,0.97); border-bottom: 1px solid rgba(201,168,76,0.15); backdrop-filter: blur(12px); }
+    .nav-brand { display: flex; align-items: center; gap: 10px; text-decoration: none; }
+    .nav-emblem { width: 32px; height: 32px; filter: drop-shadow(0 0 6px rgba(201,168,76,0.45)); }
+    .nav-wordmark { font-family: 'Cinzel', serif; font-size: 1.1rem; font-weight: 700; letter-spacing: 0.12em; background: linear-gradient(135deg, var(--gold-light), var(--gold-mid)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+    .nav-back { font-size: 0.82rem; color: var(--text-muted); text-decoration: none; letter-spacing: 0.04em; transition: color 0.2s; }
+    .nav-back:hover { color: var(--gold-light); }
+
+    .page-wrap { max-width: 800px; margin: 0 auto; padding: 64px 24px 80px; }
+    .page-label { font-family: 'Cinzel', serif; font-size: 0.68rem; font-weight: 600; letter-spacing: 0.3em; color: var(--gold-mid); text-transform: uppercase; margin-bottom: 10px; opacity: 0.8; }
+    .page-title { font-family: 'Cinzel', serif; font-size: clamp(1.8rem, 4vw, 2.6rem); font-weight: 700; background: linear-gradient(135deg, var(--text-white), rgba(240,208,128,0.85)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; margin-bottom: 8px; }
+    .page-subtitle { font-size: 1rem; color: var(--text-muted); margin-bottom: 48px; }
+    .divider { width: 100%; height: 1px; background: linear-gradient(90deg, transparent, rgba(201,168,76,0.25), transparent); margin: 40px 0; }
+
+    .contact-card { background: var(--bg-card); border: 1px solid var(--border-gold); border-radius: 16px; padding: 36px 32px; margin-bottom: 32px; display: flex; align-items: flex-start; gap: 20px; }
+    .contact-icon { font-size: 2rem; flex-shrink: 0; }
+    .contact-title { font-family: 'Cinzel', serif; font-size: 1rem; font-weight: 600; color: var(--gold-light); margin-bottom: 8px; letter-spacing: 0.05em; }
+    .contact-desc { font-size: 0.88rem; color: var(--text-muted); margin-bottom: 12px; }
+    .contact-link { display: inline-flex; align-items: center; gap: 6px; padding: 10px 22px; background: linear-gradient(135deg, var(--gold-mid), var(--gold-dark)); color: #0a0a18; font-size: 0.85rem; font-weight: 600; text-decoration: none; border-radius: 50px; transition: all 0.3s; }
+    .contact-link:hover { background: linear-gradient(135deg, var(--gold-light), var(--gold-mid)); transform: translateY(-1px); }
+
+    h2 { font-family: 'Cinzel', serif; font-size: 1.05rem; font-weight: 600; color: var(--gold-light); letter-spacing: 0.06em; margin: 36px 0 16px; }
+    .faq-item { background: var(--bg-card); border: 1px solid var(--border-gold); border-radius: 12px; padding: 20px 24px; margin-bottom: 12px; }
+    .faq-q { font-size: 0.92rem; font-weight: 600; color: var(--text-white); margin-bottom: 8px; }
+    .faq-a { font-size: 0.88rem; color: var(--text-muted); line-height: 1.65; }
+    a { color: var(--gold-mid); text-decoration: none; } a:hover { color: var(--gold-light); }
+
+    footer { border-top: 1px solid rgba(201,168,76,0.1); padding: 32px 24px; text-align: center; }
+    .footer-links { display: flex; gap: 28px; justify-content: center; flex-wrap: wrap; margin-bottom: 16px; }
+    .footer-links a { font-size: 0.82rem; color: var(--text-muted); text-decoration: none; } .footer-links a:hover { color: var(--gold-light); }
+    .footer-copy { font-size: 0.75rem; color: rgba(245,245,245,0.22); }
+
+    @media (max-width: 600px) { nav { padding: 14px 20px; } .page-wrap { padding: 48px 20px 64px; } .contact-card { flex-direction: column; padding: 24px 20px; } }
+  </style>
+</head>
+<body>
+<nav>
+  <a href="launch.html" class="nav-brand" aria-label="HastVeda Home">
+    <svg class="nav-emblem" viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <defs><radialGradient id="sg1" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#f0d080"/><stop offset="100%" stop-color="#8b6914"/></radialGradient></defs>
+      <path d="M40 62 C40 62 24 52 22 38 C20 24 28 18 34 20 C36 14 44 14 46 20 C52 18 60 24 58 38 C56 52 40 62 40 62Z" stroke="url(#sg1)" stroke-width="1.5" fill="none" opacity="0.9"/>
+      <path d="M30 36 Q40 32 50 36" stroke="url(#sg1)" stroke-width="1.2" fill="none" opacity="0.8"/>
+      <path d="M28 44 Q40 40 52 44" stroke="url(#sg1)" stroke-width="1" fill="none" opacity="0.65"/>
+      <circle cx="40" cy="40" r="2.5" fill="url(#sg1)" opacity="0.95"/>
+    </svg>
+    <span class="nav-wordmark">HastVeda</span>
+  </a>
+  <a href="launch.html" class="nav-back">← Back to Home</a>
+</nav>
+
+<div class="page-wrap">
+  <p class="page-label">Help</p>
+  <h1 class="page-title">Support</h1>
+  <p class="page-subtitle">We're here to help. Reach out or browse the FAQ below.</p>
+
+  <div class="contact-card">
+    <div class="contact-icon">✉️</div>
+    <div>
+      <div class="contact-title">Email Support</div>
+      <p class="contact-desc">For questions, feedback, account issues, or data deletion requests, email our support team. We aim to respond within 24–48 hours.</p>
+      <a href="mailto:support@hastveda.app" class="contact-link">support@hastveda.app</a>
+    </div>
+  </div>
+
+  <div class="divider"></div>
+
+  <h2>Frequently Asked Questions</h2>
+
+  <div class="faq-item">
+    <p class="faq-q">How accurate are the palm readings?</p>
+    <p class="faq-a">HastVeda uses Google Gemini AI to analyze actual palm features. The readings are based on traditional palmistry interpretation and are provided for entertainment and self-reflection. They are not scientifically proven predictions.</p>
+  </div>
+
+  <div class="faq-item">
+    <p class="faq-q">Is my palm image stored?</p>
+    <p class="faq-a">Palm images are processed for analysis and are not permanently stored without your consent. Your reading results and history are stored securely in your account. See our <a href="privacy.html">Privacy Policy</a> for full details.</p>
+  </div>
+
+  <div class="faq-item">
+    <p class="faq-q">How do I get the best palm scan?</p>
+    <p class="faq-a">Hold your dominant hand flat with fingers slightly spread under good, even lighting. Avoid harsh shadows. The camera should be about 20–30 cm from your palm. Ensure all major palm lines are visible.</p>
+  </div>
+
+  <div class="faq-item">
+    <p class="faq-q">Can I delete my account and data?</p>
+    <p class="faq-a">Yes. Email us at <a href="mailto:support@hastveda.app">support@hastveda.app</a> with your account email and a deletion request. We will process it within 7 business days.</p>
+  </div>
+
+  <div class="faq-item">
+    <p class="faq-q">Is HastVeda available on iOS?</p>
+    <p class="faq-a">Currently HastVeda is available as an Android APK. iOS availability is planned for a future release.</p>
+  </div>
+
+  <div class="faq-item">
+    <p class="faq-q">What does the Premium plan include?</p>
+    <p class="faq-a">Premium unlocks detailed reports, couple compatibility readings, PDF export, extended reading history, and daily/weekly/monthly predictions.</p>
+  </div>
+
+  <div class="faq-item">
+    <p class="faq-q">The app isn't installing. What should I do?</p>
+    <p class="faq-a">Ensure you have enabled "Install from unknown sources" in your Android settings (Settings → Security → Unknown Sources). Download the APK again if needed and try reinstalling.</p>
+  </div>
+</div>
+
+<footer>
+  <nav class="footer-links" aria-label="Footer navigation">
+    <a href="launch.html">Home</a>
+    <a href="privacy.html">Privacy Policy</a>
+    <a href="terms.html">Terms of Service</a>
+    <a href="support.html">Support</a>
+  </nav>
+  <p class="footer-copy">&copy; 2026 HastVeda. All rights reserved.</p>
+</footer>
+</body>
+</html>

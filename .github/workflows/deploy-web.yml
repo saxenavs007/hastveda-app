@@ -1,0 +1,83 @@
+name: Deploy web
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.38.4"
+          channel: stable
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Write compile-time defines
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY }}
+          CASHFREE_ENV: ${{ secrets.CASHFREE_ENV }}
+          MIXPANEL_TOKEN: ${{ secrets.MIXPANEL_TOKEN }}
+          AWS_LAMBDA_CHAT_COMPLETION_URL: ${{ secrets.AWS_LAMBDA_CHAT_COMPLETION_URL }}
+          AWS_LAMBDA_IMAGE_GENERATION_URL: ${{ secrets.AWS_LAMBDA_IMAGE_GENERATION_URL }}
+        run: |
+          python - <<'PY'
+          import json, os
+          keys = [
+              "SUPABASE_URL",
+              "SUPABASE_ANON_KEY",
+              "SUPABASE_PUBLISHABLE_KEY",
+              "CASHFREE_ENV",
+              "MIXPANEL_TOKEN",
+              "AWS_LAMBDA_CHAT_COMPLETION_URL",
+              "AWS_LAMBDA_IMAGE_GENERATION_URL",
+          ]
+          data = {key: os.environ[key] for key in keys if os.environ.get(key)}
+          with open("ci-defines.json", "w", encoding="utf-8") as handle:
+              json.dump(data, handle)
+          print("Injected defines:", ", ".join(data) or "(none; asset fallback)")
+          PY
+
+      - name: Build release web app
+        run: |
+          flutter build web --release \
+            --base-href "/${{ github.event.repository.name }}/" \
+            --pwa-strategy=offline-first \
+            --dart-define-from-file=ci-defines.json
+          touch build/web/.nojekyll
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: build/web
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
