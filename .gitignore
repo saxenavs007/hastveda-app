@@ -33,6 +33,7 @@ pubspec.lock
 .pub-cache/
 .pub/
 /build/
+/_flutter/
 
 # Symbolication related
 app.*.symbols

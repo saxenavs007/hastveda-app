@@ -1,0 +1,15 @@
+# Static site on Render.
+# A static site is type: web with runtime: static.
+# https://render.com/docs/blueprint-spec
+services:
+  - type: web
+    name: hastveda
+    runtime: static
+    buildCommand: bash build.sh
+    staticPublishPath: build/web
+    # Existing files (JS, assets, icons) are served as-is.
+    # Any other path is rewritten to index.html so Flutter can route it.
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
