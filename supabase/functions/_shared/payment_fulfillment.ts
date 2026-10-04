@@ -171,11 +171,14 @@ export async function createInvoiceIfNeeded(
     return;
   }
 
-  const companyName = Deno.env.get("COMPANY_NAME") ||
-    "ValueNest Technologies Private Limited";
-  const companyGstin = Deno.env.get("COMPANY_GSTIN") || "08AAFCH6906C1ZR";
-  const logoUrl = companyLogoUrl();
-  const logo = await fetchPublicLogo(logoUrl);
+  const companyName = LEGAL_ENTITY_NAME;
+  const companyGstin = LEGAL_ENTITY_GSTIN;
+  const hastvedaLogoUrl = companyLogoUrl();
+  const nestLogoUrl = valueNestLogoUrl();
+  const [hastvedaLogo, valueNestLogo] = await Promise.all([
+    fetchPublicLogo(hastvedaLogoUrl),
+    fetchPublicLogo(nestLogoUrl),
+  ]);
 
   const emailHtml = buildGstInvoiceHtml({
     invoiceNumber,
@@ -191,7 +194,8 @@ export async function createInvoiceIfNeeded(
     paidAt,
     companyName,
     companyGstin,
-    logoSrc: logo ? "cid:hastveda-logo" : logoUrl,
+    hastvedaLogoSrc: hastvedaLogo ? "cid:hastveda-logo" : hastvedaLogoUrl,
+    valueNestLogoSrc: valueNestLogo ? "cid:valuenest-logo" : nestLogoUrl,
   });
 
   try {
@@ -206,15 +210,22 @@ export async function createInvoiceIfNeeded(
         to: [emailTo],
         subject: `GST Invoice ${invoiceNumber} — ${companyName}`,
         html: emailHtml,
-        attachments: logo
-          ? [
-            {
+        attachments: [
+          ...(hastvedaLogo
+            ? [{
               filename: "hastveda_logo.png",
-              content: logo.base64,
+              content: hastvedaLogo.base64,
               content_id: "hastveda-logo",
-            },
-          ]
-          : undefined,
+            }]
+            : []),
+          ...(valueNestLogo
+            ? [{
+              filename: "valuenest_logo.png",
+              content: valueNestLogo.base64,
+              content_id: "valuenest-logo",
+            }]
+            : []),
+        ],
       }),
     });
 
@@ -261,11 +272,24 @@ async function releaseInvoiceClaim(
   }
 }
 
+const LEGAL_ENTITY_NAME = "ValueNest Technologies Private Limited";
+const LEGAL_ENTITY_GSTIN = "08AAFCH6906C1ZR";
+
+function publicAssetUrl(fileName: string): string {
+  const supabaseUrl = (Deno.env.get("SUPABASE_URL") ?? "").replace(/\/$/, "");
+  return `${supabaseUrl}/storage/v1/object/public/public-assets/${fileName}`;
+}
+
 function companyLogoUrl(): string {
   const configured = Deno.env.get("COMPANY_LOGO_URL")?.trim();
   if (configured) return configured;
-  const supabaseUrl = (Deno.env.get("SUPABASE_URL") ?? "").replace(/\/$/, "");
-  return `${supabaseUrl}/storage/v1/object/public/public-assets/hastveda_logo.png`;
+  return publicAssetUrl("hastveda_logo.png");
+}
+
+function valueNestLogoUrl(): string {
+  const configured = Deno.env.get("VALUENEST_LOGO_URL")?.trim();
+  if (configured) return configured;
+  return publicAssetUrl("valuenest_logo.png");
 }
 
 async function fetchPublicLogo(
@@ -308,6 +332,22 @@ function escapeHtml(value: string): string {
     .replace(/"/g, "&quot;");
 }
 
+function brandLogoRow(hastvedaSrc: string, valueNestSrc: string): string {
+  return `<table role="presentation" cellpadding="0" cellspacing="0" align="center" style="margin:0 auto;border-collapse:collapse;">
+      <tr>
+        <td style="padding:0 16px;text-align:center;vertical-align:middle;">
+          <img src="${escapeHtml(hastvedaSrc)}" alt="HastVeda" width="64" height="64" style="display:block;margin:0 auto;border-radius:8px;background:#ffffff;" />
+          <div style="color:#D4A843;font-size:11px;margin-top:6px;letter-spacing:0.4px;">HastVeda</div>
+        </td>
+        <td style="width:1px;background:rgba(212,168,67,0.5);font-size:0;line-height:72px;">&nbsp;</td>
+        <td style="padding:0 16px;text-align:center;vertical-align:middle;">
+          <img src="${escapeHtml(valueNestSrc)}" alt="ValueNest" width="148" height="64" style="display:block;margin:0 auto;border-radius:8px;object-fit:contain;background:#071428;" />
+          <div style="color:#ffffff;font-size:11px;margin-top:6px;letter-spacing:0.4px;">ValueNest</div>
+        </td>
+      </tr>
+    </table>`;
+}
+
 function formatInr(amount: number): string {
   return `₹${amount.toFixed(2)}`;
 }
@@ -340,7 +380,8 @@ function buildGstInvoiceHtml(params: {
   paidAt: string;
   companyName: string;
   companyGstin: string;
-  logoSrc: string;
+  hastvedaLogoSrc: string;
+  valueNestLogoSrc: string;
 }): string {
   const gstPercent = Math.round(params.gstRate * 100);
   const companyName = escapeHtml(params.companyName);
@@ -349,6 +390,7 @@ function buildGstInvoiceHtml(params: {
   const customerEmail = escapeHtml(params.customerEmail);
   const description = escapeHtml(params.description);
   const paidAt = escapeHtml(formatPaidAt(params.paidAt));
+  const logos = brandLogoRow(params.hastvedaLogoSrc, params.valueNestLogoSrc);
 
   return `<!DOCTYPE html>
 <html>
@@ -356,10 +398,11 @@ function buildGstInvoiceHtml(params: {
 <body style="font-family: Arial, sans-serif; background: #f5f5f5; margin: 0; padding: 20px;">
   <div style="max-width: 640px; margin: 0 auto; background: #fff; border-radius: 12px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
     <div style="background: #1A0F05; padding: 28px 24px; text-align: center;">
-      <img src="${escapeHtml(params.logoSrc)}" alt="HastVeda" width="72" height="72" style="display:block;margin:0 auto 12px;border-radius:8px;" />
-      <h1 style="color: #D4A843; margin: 0; font-size: 22px;">${companyName}</h1>
-      <p style="color: rgba(255,255,255,0.85); margin: 8px 0 0; font-size: 13px;">GSTIN: ${companyGstin}</p>
-      <p style="color: rgba(255,255,255,0.7); margin: 6px 0 0; font-size: 12px; letter-spacing: 1px;">TAX INVOICE</p>
+      ${logos}
+      <p style="color: #D4A843; margin: 18px 0 0; font-size: 11px; letter-spacing: 1.6px;">HASTVEDA IS A BRAND OF</p>
+      <h1 style="color: #ffffff; margin: 8px 0 0; font-size: 22px; line-height: 1.3;">${companyName}</h1>
+      <p style="color: #D4A843; margin: 10px 0 0; font-size: 15px; font-weight: bold; letter-spacing: 0.4px;">GSTIN: ${companyGstin}</p>
+      <p style="color: rgba(255,255,255,0.7); margin: 8px 0 0; font-size: 12px; letter-spacing: 1px;">TAX INVOICE</p>
     </div>
     <div style="padding: 24px;">
       <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px;">
@@ -419,8 +462,16 @@ function buildGstInvoiceHtml(params: {
         </tr>
       </table>
 
-      <p style="margin-top: 24px; font-size: 12px; color: #888; text-align: center;">
-        This is a computer-generated GST invoice from ${companyName}.
+      <div style="margin-top: 28px; background: #1A0F05; border-radius: 10px; padding: 20px 16px; text-align: center;">
+        ${logos}
+        <p style="color: #ffffff; margin: 16px 0 0; font-size: 15px; font-weight: bold;">${companyName}</p>
+        <p style="color: #D4A843; margin: 6px 0 0; font-size: 13px; font-weight: bold;">GSTIN: ${companyGstin}</p>
+        <p style="color: rgba(255,255,255,0.75); margin: 8px 0 0; font-size: 12px;">
+          Legal entity behind the HastVeda brand.
+        </p>
+      </div>
+      <p style="margin-top: 16px; font-size: 12px; color: #888; text-align: center;">
+        This is a computer-generated GST invoice issued by ${companyName} (GSTIN ${companyGstin}) for the HastVeda brand.
       </p>
     </div>
   </div>

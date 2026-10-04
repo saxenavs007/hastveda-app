@@ -78,6 +78,13 @@ class _AskHastVedaScreenState extends State<AskHastVedaScreen> {
   final SpeechToText _speechToText = SpeechToText();
   bool _speechAvailable = false;
   bool _isListening = false;
+  static const int _maxQuestionChars = 500;
+  static const Duration _speechDebounce = Duration(milliseconds: 300);
+  Timer? _speechDebounceTimer;
+  String? _pendingTranscript;
+  String _textBeforeSpeech = '';
+  String _lastRecognizedWords = '';
+  bool _stoppingSpeech = false;
 
   // ── Text-to-Speech ────────────────────────────────────────
   final FlutterTts _flutterTts = FlutterTts();
@@ -190,19 +197,23 @@ class _AskHastVedaScreenState extends State<AskHastVedaScreen> {
       return;
     }
 
+    if (_questionController.text.characters.length >= _maxQuestionChars) {
+      _showSnack(
+        _isHindi
+            ? 'प्रश्न 500 अक्षरों तक सीमित है'
+            : 'Questions are limited to 500 characters',
+      );
+      return;
+    }
+
     try {
+      _speechDebounceTimer?.cancel();
+      _pendingTranscript = null;
+      _textBeforeSpeech = _questionController.text;
+      _lastRecognizedWords = '';
       setState(() => _isListening = true);
       await _speechToText.listen(
-        onResult: (SpeechRecognitionResult result) {
-          if (mounted) {
-            setState(() {
-              _questionController.text = result.recognizedWords;
-              _questionController.selection = TextSelection.fromPosition(
-                TextPosition(offset: _questionController.text.length),
-              );
-            });
-          }
-        },
+        onResult: _onSpeechResult,
         localeId: _isHindi ? 'hi_IN' : 'en_IN',
         listenFor: const Duration(seconds: 30),
         pauseFor: const Duration(seconds: 3),
@@ -223,12 +234,98 @@ class _AskHastVedaScreenState extends State<AskHastVedaScreen> {
     }
   }
 
+  void _onSpeechResult(SpeechRecognitionResult result) {
+    final words = result.recognizedWords.trim();
+    if (words.isEmpty || !mounted) return;
+    if (words == _lastRecognizedWords || words == _pendingTranscript) return;
+
+    _pendingTranscript = words;
+    if (result.finalResult) {
+      _speechDebounceTimer?.cancel();
+      _applyPendingTranscript();
+      return;
+    }
+
+    _speechDebounceTimer?.cancel();
+    _speechDebounceTimer = Timer(_speechDebounce, _applyPendingTranscript);
+  }
+
+  void _applyPendingTranscript() {
+    final words = _pendingTranscript?.trim();
+    _pendingTranscript = null;
+    if (words == null || words.isEmpty || !mounted) return;
+    if (words == _lastRecognizedWords) return;
+
+    final utterance = _composeUtterance(words);
+    if (utterance.isEmpty || utterance == _lastRecognizedWords) return;
+
+    final next = _textWithinLimit(_textBeforeSpeech, utterance);
+    if (next == null) {
+      _lastRecognizedWords = utterance;
+      if (!_stoppingSpeech) unawaited(_stopListening());
+      return;
+    }
+    if (next == _questionController.text) {
+      _lastRecognizedWords = utterance;
+      return;
+    }
+
+    _lastRecognizedWords = utterance;
+    setState(() {
+      _questionController.value = TextEditingValue(
+        text: next,
+        selection: TextSelection.collapsed(offset: next.length),
+      );
+    });
+
+    if (next.characters.length >= _maxQuestionChars && !_stoppingSpeech) {
+      unawaited(_stopListening());
+    }
+  }
+
+  /// Keeps a growing recognition as one utterance, and appends a segment
+  /// only when it is not a repeat of the previous interim result.
+  String _composeUtterance(String words) {
+    final previous = _lastRecognizedWords;
+    if (previous.isEmpty) return words;
+    if (words == previous || previous.startsWith(words)) return previous;
+    if (words.startsWith(previous)) return words;
+    return '$previous $words'.trim();
+  }
+
+  /// Returns the field text after appending [utterance], or null when there
+  /// is no room left under the 500-character cap.
+  String? _textWithinLimit(String existing, String utterance) {
+    final existingChars = existing.characters;
+    if (existingChars.length >= _maxQuestionChars) return null;
+
+    final needsSpace =
+        existing.isNotEmpty &&
+        !existing.endsWith(' ') &&
+        !existing.endsWith('\n');
+    final prefix = needsSpace ? '$existing ' : existing;
+    final room = _maxQuestionChars - prefix.characters.length;
+    if (room <= 0) return null;
+
+    final utteranceChars = utterance.characters;
+    final clipped = utteranceChars.length <= room
+        ? utterance
+        : utteranceChars.take(room).string;
+    if (clipped.isEmpty) return null;
+    return '$prefix$clipped';
+  }
+
   Future<void> _stopListening() async {
+    if (_stoppingSpeech) return;
+    _stoppingSpeech = true;
+    _speechDebounceTimer?.cancel();
+    _applyPendingTranscript();
     try {
       await _speechToText.stop();
     } catch (e) {
       debugPrint('stopListening error: $e');
     }
+    _stoppingSpeech = false;
     if (mounted) setState(() => _isListening = false);
   }
 
@@ -282,6 +379,7 @@ class _AskHastVedaScreenState extends State<AskHastVedaScreen> {
 
   @override
   void dispose() {
+    _speechDebounceTimer?.cancel();
     _questionController.dispose();
     _speechToText.stop();
     _flutterTts.stop();
