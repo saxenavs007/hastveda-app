@@ -11,6 +11,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../routes/app_routes.dart';
 import '../../services/analytics_service.dart';
 import '../../services/indian_tts.dart';
+import '../../services/speech_text.dart';
 import '../../services/app_strings.dart';
 import '../../services/error_logger.dart';
 import '../../services/locale_provider.dart';
@@ -626,6 +627,8 @@ class DetailedReadingScreen extends StatefulWidget {
 class _DetailedReadingScreenState extends State<DetailedReadingScreen> {
   bool _isLoading = true;
   bool _isSpeaking = false;
+  bool _speakingChunks = false;
+  int _speakGeneration = 0;
   Map<String, dynamic>? _reading;
   final FlutterTts _tts = FlutterTts();
   // Always derive language from the live provider so the reading detail
@@ -637,16 +640,19 @@ class _DetailedReadingScreenState extends State<DetailedReadingScreen> {
   void initState() {
     super.initState();
     _tts.setCompletionHandler(() {
-      if (mounted) setState(() => _isSpeaking = false);
+      if (_speakingChunks || !mounted) return;
+      setState(() => _isSpeaking = false);
     });
     _tts.setCancelHandler(() {
-      if (mounted) setState(() => _isSpeaking = false);
+      if (_speakingChunks || !mounted) return;
+      setState(() => _isSpeaking = false);
     });
     _loadReading();
   }
 
   @override
   void dispose() {
+    _speakGeneration++;
     if (kIsWeb) {
       WebSpeech.stop();
     } else {
@@ -663,6 +669,8 @@ class _DetailedReadingScreenState extends State<DetailedReadingScreen> {
     final code = context.watch<LocaleProvider>().languageCode;
     if (_localeCode != null && _localeCode != code && _isSpeaking) {
       _isSpeaking = false;
+      _speakGeneration++;
+      _speakingChunks = false;
       if (kIsWeb) {
         WebSpeech.stop();
       } else {
@@ -674,6 +682,8 @@ class _DetailedReadingScreenState extends State<DetailedReadingScreen> {
 
   void _speakSummary(String title, String summary) {
     if (_isSpeaking) {
+      _speakGeneration++;
+      _speakingChunks = false;
       if (kIsWeb) {
         WebSpeech.stop();
       } else {
@@ -718,14 +728,26 @@ class _DetailedReadingScreenState extends State<DetailedReadingScreen> {
   }
 
   Future<void> _speakSummaryNative(String script) async {
+    final generation = ++_speakGeneration;
     try {
       await _tts.awaitSpeakCompletion(true);
       await IndianTts.apply(_tts, hindi: _isHindi);
-      if (!mounted) return;
+      if (!mounted || generation != _speakGeneration) return;
+      _speakingChunks = true;
       setState(() => _isSpeaking = true);
-      await _tts.speak(script);
-      if (mounted) setState(() => _isSpeaking = false);
+      for (final chunk in SpeechText.chunks(script)) {
+        if (!mounted || generation != _speakGeneration) {
+          _speakingChunks = false;
+          return;
+        }
+        await _tts.speak(chunk);
+      }
+      _speakingChunks = false;
+      if (mounted && generation == _speakGeneration) {
+        setState(() => _isSpeaking = false);
+      }
     } catch (_) {
+      _speakingChunks = false;
       if (!mounted) return;
       setState(() => _isSpeaking = false);
       ScaffoldMessenger.of(context).showSnackBar(

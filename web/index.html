@@ -145,22 +145,29 @@
     <script src="flutter_bootstrap.js" async></script>
 
     <script>
-      // flutter_bootstrap.js registers flutter_service_worker.js when the app
-      // is built with --pwa-strategy=offline-first. This covers a build that
-      // skipped that registration, using the same scope as the <base> href so
-      // GitHub Pages project sites and iPhone home-screen launches stay in scope.
-      window.addEventListener("flutter-first-frame", function () {
+      // Auto-update. skipWaiting and clients.claim live in sw.js. This page
+      // reloads once a new worker takes control, and asks for a new deployment
+      // on load and again every hour.
+      (function () {
         if (!("serviceWorker" in navigator)) return;
+
         var baseEl = document.querySelector("base");
         var scope = (baseEl && baseEl.getAttribute("href")) || "/";
         if (scope.charAt(scope.length - 1) !== "/") scope += "/";
-        navigator.serviceWorker.getRegistration(scope).then(function (existing) {
-          if (existing) return;
-          navigator.serviceWorker.register(scope + "flutter_service_worker.js", {
-            scope: scope,
-          });
+        var workerUrl = scope + "sw.js";
+
+        navigator.serviceWorker
+          .register(workerUrl, { scope: scope, updateViaCache: "none" })
+          .catch(function () {});
+
+        navigator.serviceWorker.ready.then(function (registration) {
+          function checkForUpdate() {
+            registration.update().catch(function () {});
+          }
+          checkForUpdate();
+          setInterval(checkForUpdate, 60 * 60 * 1000);
         });
-      });
+      })();
     </script>
 
     <script>

@@ -11,6 +11,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../routes/app_routes.dart';
 import '../../services/analytics_service.dart';
 import '../../services/indian_tts.dart';
+import '../../services/speech_text.dart';
 import '../../services/entitlement_notifier.dart';
 import '../../services/entitlement_service.dart';
 import '../../services/locale_provider.dart';
@@ -50,6 +51,8 @@ class _PalmAnalysisScreenState extends State<PalmAnalysisScreen> {
   /// locks regardless of what the AI wrote into the analysis row.
   bool _hasPremium = false;
   bool _isSpeaking = false;
+  bool _speakingChunks = false;
+  int _speakGeneration = 0;
   bool _isExportingPdf = false;
   final FlutterTts _tts = FlutterTts();
 
@@ -58,10 +61,12 @@ class _PalmAnalysisScreenState extends State<PalmAnalysisScreen> {
     super.initState();
     _locale = widget.locale;
     _tts.setCompletionHandler(() {
-      if (mounted) setState(() => _isSpeaking = false);
+      if (_speakingChunks || !mounted) return;
+      setState(() => _isSpeaking = false);
     });
     _tts.setCancelHandler(() {
-      if (mounted) setState(() => _isSpeaking = false);
+      if (_speakingChunks || !mounted) return;
+      setState(() => _isSpeaking = false);
     });
     _tts.setErrorHandler((_) {
       if (mounted) setState(() => _isSpeaking = false);
@@ -255,6 +260,8 @@ class _PalmAnalysisScreenState extends State<PalmAnalysisScreen> {
   }
 
   void _stopSpeaking() {
+    _speakGeneration++;
+    _speakingChunks = false;
     if (kIsWeb) {
       WebSpeech.stop();
     } else {
@@ -349,14 +356,26 @@ class _PalmAnalysisScreenState extends State<PalmAnalysisScreen> {
   }
 
   Future<void> _speakReadingNative(String script) async {
+    final generation = ++_speakGeneration;
     try {
       await _tts.awaitSpeakCompletion(true);
       await IndianTts.apply(_tts, hindi: _isHindi);
-      if (!mounted) return;
+      if (!mounted || generation != _speakGeneration) return;
+      _speakingChunks = true;
       setState(() => _isSpeaking = true);
-      await _tts.speak(script);
-      if (mounted) setState(() => _isSpeaking = false);
+      for (final chunk in SpeechText.chunks(script)) {
+        if (!mounted || generation != _speakGeneration) {
+          _speakingChunks = false;
+          return;
+        }
+        await _tts.speak(chunk);
+      }
+      _speakingChunks = false;
+      if (mounted && generation == _speakGeneration) {
+        setState(() => _isSpeaking = false);
+      }
     } catch (e) {
+      _speakingChunks = false;
       debugPrint('Reading TTS failed: $e');
       if (!mounted) return;
       setState(() => _isSpeaking = false);

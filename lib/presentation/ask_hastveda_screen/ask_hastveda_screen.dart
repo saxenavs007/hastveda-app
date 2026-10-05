@@ -21,6 +21,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../routes/app_routes.dart';
 import '../../services/analytics_service.dart';
 import '../../services/indian_tts.dart';
+import '../../services/speech_transcript.dart';
+import '../../services/web_mic.dart';
 import '../../services/cashfree_payment_service.dart';
 import '../../services/connectivity_service.dart';
 import '../../services/entitlement_notifier.dart';
@@ -76,6 +78,7 @@ class _AskHastVedaScreenState extends State<AskHastVedaScreen> {
 
   // ── Speech-to-Text ────────────────────────────────────────
   final SpeechToText _speechToText = SpeechToText();
+  final WebMic _webMic = WebMic();
   bool _speechAvailable = false;
   bool _isListening = false;
   static const int _maxQuestionChars = 500;
@@ -83,7 +86,7 @@ class _AskHastVedaScreenState extends State<AskHastVedaScreen> {
   Timer? _speechDebounceTimer;
   String? _pendingTranscript;
   String _textBeforeSpeech = '';
-  String _lastRecognizedWords = '';
+  final SpeechTranscript _transcript = SpeechTranscript();
   bool _stoppingSpeech = false;
 
   // ── Text-to-Speech ────────────────────────────────────────
@@ -134,20 +137,32 @@ class _AskHastVedaScreenState extends State<AskHastVedaScreen> {
     });
   }
 
+  void _onMicStatus(String status) {
+    if (status != 'done' && status != 'notListening') return;
+    _speechDebounceTimer?.cancel();
+    _applyPendingTranscript();
+    _transcript.clearInterim();
+    if (mounted) setState(() => _isListening = false);
+  }
+
+  void _onMicError(String message) {
+    debugPrint('STT error: $message');
+    if (mounted) setState(() => _isListening = false);
+  }
+
   Future<void> _initSpeech() async {
     try {
-      _speechAvailable = await _speechToText.initialize(
-        onError: (error) {
-          debugPrint('STT error: ${error.errorMsg}');
-          if (mounted) setState(() => _isListening = false);
-        },
-        onStatus: (status) {
-          debugPrint('STT status: $status');
-          if (status == 'done' || status == 'notListening') {
-            if (mounted) setState(() => _isListening = false);
-          }
-        },
-      );
+      if (kIsWeb) {
+        _speechAvailable = await _webMic.initialize(
+          onError: _onMicError,
+          onStatus: _onMicStatus,
+        );
+      } else {
+        _speechAvailable = await _speechToText.initialize(
+          onError: (error) => _onMicError(error.errorMsg),
+          onStatus: _onMicStatus,
+        );
+      }
       if (mounted) setState(() {});
     } catch (e) {
       debugPrint('initSpeech error: $e');
@@ -209,17 +224,33 @@ class _AskHastVedaScreenState extends State<AskHastVedaScreen> {
     try {
       _speechDebounceTimer?.cancel();
       _pendingTranscript = null;
+      _transcript.reset();
       _textBeforeSpeech = _questionController.text;
-      _lastRecognizedWords = '';
       setState(() => _isListening = true);
+      final localeId = _isHindi ? 'hi_IN' : 'en_IN';
+      if (kIsWeb) {
+        // continuous stays off and interimResults stays on. The speech_to_text
+        // web plugin sets both from the same flag, which restarts recognition
+        // and types the first sentence again.
+        final started = await _webMic.listen(
+          localeId: localeId,
+          onResult: _onSpeechWords,
+        );
+        if (!started) {
+          throw StateError('Microphone could not start');
+        }
+        return;
+      }
       await _speechToText.listen(
         onResult: _onSpeechResult,
-        localeId: _isHindi ? 'hi_IN' : 'en_IN',
-        listenFor: const Duration(seconds: 30),
-        pauseFor: const Duration(seconds: 3),
-        partialResults: true,
-        cancelOnError: true,
-        listenMode: ListenMode.confirmation,
+        listenOptions: SpeechListenOptions(
+          localeId: localeId,
+          listenFor: const Duration(seconds: 30),
+          pauseFor: const Duration(seconds: 3),
+          partialResults: true,
+          cancelOnError: true,
+          listenMode: ListenMode.confirmation,
+        ),
       );
     } catch (e) {
       debugPrint('startListening error: $e');
@@ -235,12 +266,17 @@ class _AskHastVedaScreenState extends State<AskHastVedaScreen> {
   }
 
   void _onSpeechResult(SpeechRecognitionResult result) {
-    final words = result.recognizedWords.trim();
-    if (words.isEmpty || !mounted) return;
-    if (words == _lastRecognizedWords || words == _pendingTranscript) return;
+    _onSpeechWords(result.recognizedWords, result.finalResult);
+  }
 
-    _pendingTranscript = words;
-    if (result.finalResult) {
+  void _onSpeechWords(String words, bool isFinal) {
+    final spoken = words.trim();
+    if (spoken.isEmpty || !mounted) return;
+    final utterance = _transcript.apply(spoken, isFinal: isFinal);
+    if (utterance == null || utterance == _pendingTranscript) return;
+
+    _pendingTranscript = utterance;
+    if (isFinal) {
       _speechDebounceTimer?.cancel();
       _applyPendingTranscript();
       return;
@@ -251,26 +287,17 @@ class _AskHastVedaScreenState extends State<AskHastVedaScreen> {
   }
 
   void _applyPendingTranscript() {
-    final words = _pendingTranscript?.trim();
+    final utterance = _pendingTranscript?.trim();
     _pendingTranscript = null;
-    if (words == null || words.isEmpty || !mounted) return;
-    if (words == _lastRecognizedWords) return;
-
-    final utterance = _composeUtterance(words);
-    if (utterance.isEmpty || utterance == _lastRecognizedWords) return;
+    if (utterance == null || utterance.isEmpty || !mounted) return;
 
     final next = _textWithinLimit(_textBeforeSpeech, utterance);
     if (next == null) {
-      _lastRecognizedWords = utterance;
       if (!_stoppingSpeech) unawaited(_stopListening());
       return;
     }
-    if (next == _questionController.text) {
-      _lastRecognizedWords = utterance;
-      return;
-    }
+    if (next == _questionController.text) return;
 
-    _lastRecognizedWords = utterance;
     setState(() {
       _questionController.value = TextEditingValue(
         text: next,
@@ -281,16 +308,6 @@ class _AskHastVedaScreenState extends State<AskHastVedaScreen> {
     if (next.characters.length >= _maxQuestionChars && !_stoppingSpeech) {
       unawaited(_stopListening());
     }
-  }
-
-  /// Keeps a growing recognition as one utterance, and appends a segment
-  /// only when it is not a repeat of the previous interim result.
-  String _composeUtterance(String words) {
-    final previous = _lastRecognizedWords;
-    if (previous.isEmpty) return words;
-    if (words == previous || previous.startsWith(words)) return previous;
-    if (words.startsWith(previous)) return words;
-    return '$previous $words'.trim();
   }
 
   /// Returns the field text after appending [utterance], or null when there
@@ -321,7 +338,11 @@ class _AskHastVedaScreenState extends State<AskHastVedaScreen> {
     _speechDebounceTimer?.cancel();
     _applyPendingTranscript();
     try {
-      await _speechToText.stop();
+      if (kIsWeb) {
+        await _webMic.stop();
+      } else {
+        await _speechToText.stop();
+      }
     } catch (e) {
       debugPrint('stopListening error: $e');
     }
@@ -381,7 +402,11 @@ class _AskHastVedaScreenState extends State<AskHastVedaScreen> {
   void dispose() {
     _speechDebounceTimer?.cancel();
     _questionController.dispose();
-    _speechToText.stop();
+    if (kIsWeb) {
+      _webMic.stop();
+    } else {
+      _speechToText.stop();
+    }
     _flutterTts.stop();
     super.dispose();
   }

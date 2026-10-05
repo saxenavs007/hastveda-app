@@ -3,6 +3,8 @@ import 'dart:js_interop';
 
 import 'package:web/web.dart' as web;
 
+import 'speech_text.dart';
+
 /// Speaks from the browser's speech engine. [speak] must be called directly
 /// from a tap so Safari and Chrome on iOS still allow audio.
 class WebSpeech {
@@ -11,6 +13,7 @@ class WebSpeech {
   static Timer? _keepAlive;
   static Timer? _voiceWait;
   static JSFunction? _voicesListener;
+  static final List<web.SpeechSynthesisUtterance> _utterances = [];
 
   static void stop() {
     _generation++;
@@ -19,6 +22,7 @@ class WebSpeech {
     _keepAlive = null;
     _voiceWait?.cancel();
     _voiceWait = null;
+    _utterances.clear();
     _detachVoicesListener();
     web.window.speechSynthesis.cancel();
   }
@@ -41,7 +45,7 @@ class WebSpeech {
       _keepAlive?.cancel();
       if (synth.paused) synth.resume();
 
-      final chunks = _chunks(trimmed);
+      final chunks = SpeechText.chunks(trimmed);
       if (chunks.isEmpty) {
         onError('Nothing to read aloud.');
         return false;
@@ -94,14 +98,14 @@ class WebSpeech {
       }
       synth.resume();
 
-      // iOS Safari pauses long readings unless synthesis is resumed.
+      // Chrome stops a long queue unless resume() is called while it speaks.
+      // pause() drops every utterance after the current one, so it is not used.
       _keepAlive = Timer.periodic(const Duration(seconds: 8), (_) {
-        if (generation != _generation || !synth.speaking) {
+        if (generation != _generation) {
           _keepAlive?.cancel();
           return;
         }
-        synth.pause();
-        synth.resume();
+        if (synth.paused || synth.speaking || synth.pending) synth.resume();
       });
       return true;
     } catch (_) {
@@ -120,17 +124,28 @@ class WebSpeech {
     required void Function() onError,
   }) {
     final session = ++_session;
-    var pending = chunks.length;
-    for (final chunk in chunks) {
-      final utterance = web.SpeechSynthesisUtterance(chunk)
+    _utterances.clear();
+    var index = 0;
+
+    void speakNext() {
+      if (session != _session || generation != _generation) return;
+      if (index >= chunks.length) {
+        _utterances.clear();
+        onDone();
+        return;
+      }
+      final utterance = web.SpeechSynthesisUtterance(chunks[index])
         ..lang = lang
         ..rate = 0.92
         ..volume = 1;
       if (voice != null) utterance.voice = voice;
+      // The browser drops later utterances if these objects are collected,
+      // and if they are all queued before the first one ends.
+      _utterances.add(utterance);
       utterance.onend = ((web.Event _) {
         if (session != _session || generation != _generation) return;
-        pending--;
-        if (pending <= 0) onDone();
+        index++;
+        speakNext();
       }).toJS;
       utterance.onerror = ((web.SpeechSynthesisErrorEvent event) {
         if (session != _session || generation != _generation) return;
@@ -139,8 +154,10 @@ class WebSpeech {
         onError();
       }).toJS;
       synth.speak(utterance);
+      if (synth.paused) synth.resume();
     }
-    synth.resume();
+
+    speakNext();
   }
 
   static void _waitForIndianVoice(
@@ -235,32 +252,4 @@ class WebSpeech {
     return score;
   }
 
-  static List<String> _chunks(String text) {
-    final pieces = text.split(RegExp(r'(?<=[.!?\n])\s+'));
-    final chunks = <String>[];
-    final buffer = StringBuffer();
-    void flush() {
-      final value = buffer.toString().trim();
-      if (value.isNotEmpty) chunks.add(value);
-      buffer.clear();
-    }
-
-    for (final piece in pieces) {
-      final part = piece.trim();
-      if (part.isEmpty) continue;
-      if (part.length > 180) {
-        flush();
-        for (var i = 0; i < part.length; i += 180) {
-          final end = i + 180 < part.length ? i + 180 : part.length;
-          chunks.add(part.substring(i, end).trim());
-        }
-        continue;
-      }
-      if (buffer.length + part.length > 180) flush();
-      if (buffer.isNotEmpty) buffer.write(' ');
-      buffer.write(part);
-    }
-    flush();
-    return chunks;
-  }
 }

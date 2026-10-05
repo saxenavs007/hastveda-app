@@ -23,6 +23,9 @@ services:
       - path: /flutter_service_worker.js
         name: Cache-Control
         value: public, max-age=0, must-revalidate
+      - path: /sw.js
+        name: Cache-Control
+        value: public, max-age=0, must-revalidate
       - path: /main.dart.js
         name: Cache-Control
         value: public, max-age=0, must-revalidate

@@ -66,8 +66,12 @@ jobs:
         run: |
           flutter build web --release \
             --base-href "/${{ github.event.repository.name }}/" \
-            --pwa-strategy=offline-first \
+            --pwa-strategy=none \
             --dart-define-from-file=ci-defines.json
+          cp web/sw.js build/web/sw.js
+          BUILD_ID="$(date -u +%Y%m%d%H%M%S)"
+          sed -i "s/__HASTVEDA_BUILD_ID__/${BUILD_ID}/g" build/web/sw.js
+          cp build/web/sw.js build/web/flutter_service_worker.js
           touch build/web/.nojekyll
 
       - name: Upload Pages artifact
