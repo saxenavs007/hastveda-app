@@ -10,7 +10,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 //   HastVeda Android App
 //   → FCM device token (captured here)
 //   → Supabase (users.fcm_token — persisted here)
-//   → Firebase Cloud Messaging (server-side, via Edge Function — NOT implemented here)
+//   → Firebase Cloud Messaging (morning-engagement Edge Function)
 //   → Android device
 //
 // IMPORTANT:
@@ -55,6 +55,7 @@ class FCMService {
   static final FCMService instance = FCMService._();
 
   static const String _prefFcmToken = 'hastveda_fcm_token';
+  static const String _prefFcmUser = 'hastveda_fcm_token_user';
   static const String _prefPermissionRequested =
       'hastveda_fcm_permission_requested';
   static const String _prefPermissionGranted =
@@ -157,19 +158,21 @@ class FCMService {
       final userId = Supabase.instance.client.auth.currentUser?.id;
       if (userId == null) return;
 
-      // Check if token already matches — avoid unnecessary writes
+      // Skip only when this same account already stored this token.
       final prefs = await SharedPreferences.getInstance();
       final cachedToken = prefs.getString(_prefFcmToken);
-      if (cachedToken == token) return;
+      final cachedUser = prefs.getString(_prefFcmUser);
+      if (cachedToken == token && cachedUser == userId) return;
 
       await Supabase.instance.client.from('users').upsert({
         'id': userId,
         'fcm_token': token,
-        'platform': 'android',
+        'platform': defaultTargetPlatform.name,
         'last_active_at': DateTime.now().toIso8601String(),
       });
 
       await prefs.setString(_prefFcmToken, token);
+      await prefs.setString(_prefFcmUser, userId);
       _currentToken = token;
       debugPrint('[FCM] Token persisted to Supabase.');
     } catch (e) {
@@ -189,6 +192,7 @@ class FCMService {
       }
       final prefs = await SharedPreferences.getInstance();
       await prefs.remove(_prefFcmToken);
+      await prefs.remove(_prefFcmUser);
       _currentToken = null;
     } catch (e) {
       debugPrint('[FCM] Token clear error: $e');
@@ -228,6 +232,7 @@ class FCMService {
       case 'premium':
         return FCMDeepLinks.premium;
       case 'account':
+      case 'morning_curiosity':
         return FCMDeepLinks.notifications;
       default:
         return FCMDeepLinks.home;

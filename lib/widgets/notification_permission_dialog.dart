@@ -101,7 +101,10 @@ class NotificationPermissionDialog extends StatelessWidget {
                     properties: {'source': 'permission_dialog'},
                   );
                   if (granted) {
-                    await FCMService.instance.captureToken();
+                    final token = await FCMService.instance.captureToken();
+                    if (token != null) {
+                      await FCMService.instance.persistToken(token);
+                    }
                   }
                 },
                 style: ElevatedButton.styleFrom(

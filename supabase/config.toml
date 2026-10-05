@@ -5,3 +5,6 @@ verify_jwt = false
 
 [functions.horoscope-insights]
 verify_jwt = true
+
+[functions.morning-engagement]
+verify_jwt = false

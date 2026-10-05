@@ -5,6 +5,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../config/supabase_config.dart';
 import './error_logger.dart';
+import './fcm_service.dart';
 
 // ============================================================
 // MODELS
@@ -462,6 +463,7 @@ class SupabaseService {
 
   Future<void> signOut() async {
     try {
+      await FCMService.instance.clearToken();
       await client.auth.signOut();
     } catch (e) {
       await errorLogger.logAuthError(operation: 'sign_out', error: e);

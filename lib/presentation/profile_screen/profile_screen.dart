@@ -11,6 +11,7 @@ import '../../services/entitlement_notifier.dart';
 import '../../services/locale_provider.dart';
 import '../../services/theme_provider.dart';
 import '../../services/analytics_service.dart';
+import '../../services/fcm_service.dart';
 import '../../services/notification_preferences_service.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/hastveda_error_widget.dart';
@@ -103,6 +104,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       analytics.track(HastVedaEvents.logout);
       analytics.reset();
       NotificationPreferencesService.instance.reset();
+      await FCMService.instance.clearToken();
       await Supabase.instance.client.auth.signOut();
       if (mounted) context.go(AppRoutes.login);
     }
@@ -145,6 +147,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       analytics.track('account_deleted');
       analytics.reset();
       NotificationPreferencesService.instance.reset();
+      await FCMService.instance.clearToken();
       await Supabase.instance.client.auth.signOut();
       if (mounted) context.go(AppRoutes.login);
     } catch (e) {
