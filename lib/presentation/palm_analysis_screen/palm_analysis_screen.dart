@@ -1,3 +1,6 @@
+import 'dart:async';
+
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_tts/flutter_tts.dart';
 import 'package:go_router/go_router.dart';
@@ -12,6 +15,7 @@ import '../../services/entitlement_notifier.dart';
 import '../../services/entitlement_service.dart';
 import '../../services/locale_provider.dart';
 import '../../services/pdf_export_service.dart';
+import '../../services/web_speech.dart';
 import '../../theme/app_theme.dart';
 
 class PalmAnalysisScreen extends StatefulWidget {
@@ -97,7 +101,7 @@ class _PalmAnalysisScreenState extends State<PalmAnalysisScreen> {
       _locale = providerLocale;
       if (_isSpeaking) {
         _isSpeaking = false;
-        _tts.stop();
+        _stopSpeaking();
       }
     }
     // Premium granted while this route is under the paywall.
@@ -246,8 +250,23 @@ class _PalmAnalysisScreenState extends State<PalmAnalysisScreen> {
 
   @override
   void dispose() {
-    _tts.stop();
+    _stopSpeaking();
     super.dispose();
+  }
+
+  void _stopSpeaking() {
+    if (kIsWeb) {
+      WebSpeech.stop();
+    } else {
+      _tts.stop();
+    }
+  }
+
+  void _showSpeakError(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message), behavior: SnackBarBehavior.floating),
+    );
   }
 
   String _readingScript() {
@@ -288,14 +307,48 @@ class _PalmAnalysisScreenState extends State<PalmAnalysisScreen> {
     return parts.join('\n\n');
   }
 
-  Future<void> _speakReading() async {
+  void _speakReading() {
     if (_isSpeaking) {
-      await _tts.stop();
+      _stopSpeaking();
       if (mounted) setState(() => _isSpeaking = false);
       return;
     }
     final script = _readingScript();
-    if (script.isEmpty) return;
+    if (script.isEmpty) {
+      _showSpeakError(
+        _isHindi ? 'पढ़ने के लिए कुछ नहीं है' : 'Nothing to read aloud',
+      );
+      return;
+    }
+
+    // Browser speech must start inside this tap. Any await before speak()
+    // drops the user gesture and Safari/Chrome block audio.
+    if (kIsWeb) {
+      setState(() => _isSpeaking = true);
+      final started = WebSpeech.speak(
+        text: script,
+        hindi: _isHindi,
+        onDone: () {
+          if (mounted) setState(() => _isSpeaking = false);
+        },
+        onError: (message) {
+          if (!mounted) return;
+          setState(() => _isSpeaking = false);
+          _showSpeakError(
+            _isHindi
+                ? 'आवाज़ इस ब्राउज़र में नहीं चल सकी। फिर से टैप करें।'
+                : message,
+          );
+        },
+      );
+      if (!started && mounted) setState(() => _isSpeaking = false);
+      return;
+    }
+
+    unawaited(_speakReadingNative(script));
+  }
+
+  Future<void> _speakReadingNative(String script) async {
     try {
       await _tts.awaitSpeakCompletion(true);
       await IndianTts.apply(_tts, hindi: _isHindi);
@@ -305,7 +358,13 @@ class _PalmAnalysisScreenState extends State<PalmAnalysisScreen> {
       if (mounted) setState(() => _isSpeaking = false);
     } catch (e) {
       debugPrint('Reading TTS failed: $e');
-      if (mounted) setState(() => _isSpeaking = false);
+      if (!mounted) return;
+      setState(() => _isSpeaking = false);
+      _showSpeakError(
+        _isHindi
+            ? 'आवाज़ नहीं चल सकी। फिर से कोशिश करें।'
+            : 'Could not play audio. Please try again.',
+      );
     }
   }
 

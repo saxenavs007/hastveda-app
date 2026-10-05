@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import '../services/app_strings.dart';
 import '../services/locale_provider.dart';
 import '../theme/app_theme.dart';
+import 'custom_image_widget.dart';
 
 /// HastVeda branded error widget — replaces blank/white crash screens.
 /// Used both as ErrorWidget.builder replacement and as an inline error state.
@@ -67,8 +68,8 @@ class HastVedaErrorWidget extends StatelessWidget {
                   ),
                   child: ClipRRect(
                     borderRadius: BorderRadius.circular(16),
-                    child: Image.asset(
-                      'assets/images/hastveda_logo.png',
+                    child: const CustomImageWidget(
+                      imageUrl: 'assets/images/hastveda_logo.png',
                       fit: BoxFit.contain,
                     ),
                   ),

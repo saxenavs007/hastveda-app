@@ -888,6 +888,18 @@ class _PersonScanTab extends StatelessWidget {
                           ? Image.network(
                               image!.path,
                               fit: BoxFit.cover,
+                              webHtmlElementStrategy:
+                                  WebHtmlElementStrategy.fallback,
+                              loadingBuilder: (context, child, progress) {
+                                if (progress == null) return child;
+                                return const Center(
+                                  child: Icon(
+                                    Icons.image_outlined,
+                                    color: AppTheme.primary,
+                                    size: 48,
+                                  ),
+                                );
+                              },
                               errorBuilder: (_, __, ___) => const Icon(
                                 Icons.image_not_supported_outlined,
                                 color: AppTheme.primary,

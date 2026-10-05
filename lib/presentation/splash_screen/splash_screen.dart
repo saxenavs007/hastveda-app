@@ -7,6 +7,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../routes/app_routes.dart';
 import '../../services/theme_provider.dart';
 import '../../theme/app_theme.dart';
+import '../../widgets/custom_image_widget.dart';
 import '../../widgets/luxury_surface.dart';
 
 class SplashScreen extends StatefulWidget {
@@ -91,8 +92,8 @@ class _SplashScreenState extends State<SplashScreen>
                     ),
                     child: ClipRRect(
                       borderRadius: BorderRadius.circular(27),
-                      child: Image.asset(
-                        'assets/images/hastveda_logo.png',
+                      child: const CustomImageWidget(
+                        imageUrl: 'assets/images/hastveda_logo.png',
                         fit: BoxFit.contain,
                       ),
                     ),

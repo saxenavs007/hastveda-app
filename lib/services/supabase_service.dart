@@ -471,7 +471,10 @@ class SupabaseService {
 
   Future<void> resetPassword(String email) async {
     try {
-      await client.auth.resetPasswordForEmail(email);
+      await client.auth.resetPasswordForEmail(
+        email,
+        redirectTo: 'https://www.hastveda.co/reset-password',
+      );
     } on AuthException catch (e) {
       await errorLogger.logAuthError(
         operation: 'reset_password',

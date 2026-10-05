@@ -13,6 +13,7 @@ import '../../services/analytics_service.dart';
 import '../../services/entitlement_service.dart';
 import '../../services/fcm_service.dart';
 import '../../theme/app_theme.dart';
+import '../../widgets/custom_image_widget.dart';
 
 class LoginScreen extends StatefulWidget {
   /// Where to send the user once they are signed in. Set when the router
@@ -103,6 +104,45 @@ class _LoginScreenState extends State<LoginScreen>
       );
       setState(
         () => _errorMessage = isOffline ? s.offlineAuthError : s.signInFailed,
+      );
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _forgotPassword(AppStrings s) async {
+    final email = _emailController.text.trim();
+    if (email.isEmpty || !email.contains('@')) {
+      setState(() => _errorMessage = s.enterEmail);
+      return;
+    }
+    final connectivity = ConnectivityService.instance;
+    if (connectivity.isOffline) {
+      setState(() => _errorMessage = s.offlineAuthError);
+      return;
+    }
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+    try {
+      await Supabase.instance.client.auth.resetPasswordForEmail(
+        email,
+        redirectTo: AppRoutes.passwordResetRedirect,
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(s.passwordResetSent),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } on AuthException catch (e) {
+      setState(() => _errorMessage = e.message);
+    } catch (_) {
+      final isOffline = ConnectivityService.instance.isOffline;
+      setState(
+        () => _errorMessage = isOffline ? s.offlineAuthError : s.somethingWentWrong,
       );
     } finally {
       if (mounted) setState(() => _isLoading = false);
@@ -297,8 +337,8 @@ class _LoginScreenState extends State<LoginScreen>
                 ),
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(18),
-                  child: Image.asset(
-                    'assets/images/hastveda_logo.png',
+                  child: const CustomImageWidget(
+                    imageUrl: 'assets/images/hastveda_logo.png',
                     fit: BoxFit.contain,
                   ),
                 ),
@@ -424,7 +464,7 @@ class _LoginScreenState extends State<LoginScreen>
                 ),
               // Forms
               SizedBox(
-                height: 340,
+                height: 390,
                 child: TabBarView(
                   controller: _tabController,
                   children: [
@@ -448,6 +488,8 @@ class _LoginScreenState extends State<LoginScreen>
                       emailHint: s.enterEmail,
                       passwordLabel: s.password,
                       passwordHint: s.enterPassword,
+                      forgotLabel: s.forgotPassword,
+                      onForgotPassword: () => _forgotPassword(s),
                     ),
                     _SignUpFormWidget(
                       nameController: _nameController,
@@ -593,6 +635,8 @@ class _LoginForm extends StatelessWidget {
   final bool isDark;
   final Color surfaceEl, outline, textPri, textSec, textMut, primaryColor;
   final String buttonLabel, emailLabel, emailHint, passwordLabel, passwordHint;
+  final String forgotLabel;
+  final VoidCallback onForgotPassword;
 
   const _LoginForm({
     required this.emailController,
@@ -613,6 +657,8 @@ class _LoginForm extends StatelessWidget {
     required this.emailHint,
     required this.passwordLabel,
     required this.passwordHint,
+    required this.forgotLabel,
+    required this.onForgotPassword,
   });
 
   @override
@@ -650,7 +696,27 @@ class _LoginForm extends StatelessWidget {
           textMut: textMut,
           isDark: isDark,
         ),
-        const SizedBox(height: 24),
+        Align(
+          alignment: Alignment.centerRight,
+          child: TextButton(
+            onPressed: isLoading ? null : onForgotPassword,
+            style: TextButton.styleFrom(
+              foregroundColor: primaryColor,
+              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+              minimumSize: const Size(48, 36),
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            ),
+            child: Text(
+              forgotLabel,
+              style: GoogleFonts.outfit(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: primaryColor,
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: 8),
         SizedBox(
           width: double.infinity,
           height: 52,

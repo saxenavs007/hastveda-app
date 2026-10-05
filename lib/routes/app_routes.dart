@@ -14,6 +14,7 @@ import '../presentation/report_history_screen/report_history_screen.dart';
 import '../presentation/splash_screen/splash_screen.dart';
 import '../presentation/onboarding_screen/onboarding_screen.dart';
 import '../presentation/login_screen/login_screen.dart';
+import '../presentation/login_screen/reset_password_screen.dart';
 import '../presentation/profile_screen/profile_screen.dart';
 import '../presentation/settings_screen/settings_screen.dart';
 import '../presentation/notifications_screen/notifications_screen.dart';
@@ -39,6 +40,9 @@ class AppRoutes {
   static const String splash = '/';
   static const String onboarding = '/onboarding';
   static const String login = '/login';
+  static const String resetPassword = '/reset-password';
+  static const String passwordResetRedirect =
+      'https://www.hastveda.co/reset-password';
   static const String homeScreen = '/home-screen';
   static const String palmScanScreen = '/palm-scan-screen';
   static const String predictionsScreen = '/predictions-screen';
@@ -228,6 +232,12 @@ final GoRouter appRouter = GoRouter(
         state,
         LoginScreen(redirectTo: state.uri.queryParameters['redirect']),
       ),
+    ),
+    GoRoute(
+      path: AppRoutes.resetPassword,
+      parentNavigatorKey: rootNavigatorKey,
+      pageBuilder: (context, state) =>
+          _fadePage(state, const ResetPasswordScreen()),
     ),
     // Premium Paywall
     GoRoute(

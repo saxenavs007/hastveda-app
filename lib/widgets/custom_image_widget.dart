@@ -1,26 +1,69 @@
-import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter_svg/flutter_svg.dart';
-import '../core/app_export.dart';
+
+import 'local_image.dart';
+
+/// Public Cloudflare R2 host for HastVeda images and downloads.
+const String kAssetCdnOrigin = 'https://download.hastveda.co';
+
+/// Turns a root-relative or scheme-less CDN path into an absolute URL.
+/// Bundled Flutter assets (`assets/...`) are left unchanged.
+String resolveMediaUrl(String raw) {
+  final url = raw.trim();
+  if (url.isEmpty || url.startsWith('assets/')) return url;
+  if (url.startsWith('https://') || url.startsWith('http://')) return url;
+  if (url.startsWith('//')) return 'https:$url';
+  if (url.startsWith('download.hastveda.co/') || url == 'download.hastveda.co') {
+    return 'https://$url';
+  }
+  if (url.startsWith('/')) return '$kAssetCdnOrigin$url';
+  return url;
+}
 
 extension ImageTypeExtension on String {
   ImageType get imageType {
-    if (startsWith('http') || startsWith('https')) {
+    final resolved = resolveMediaUrl(this);
+    if (resolved.startsWith('https://') ||
+        resolved.startsWith('http://') ||
+        resolved.startsWith('blob:')) {
       return ImageType.network;
-    } else if (endsWith('.svg')) {
-      return ImageType.svg;
-    } else if (startsWith('file: //')) {
-      return ImageType.file;
-    } else {
-      return ImageType.png;
     }
+    if (toLowerCase().endsWith('.svg')) return ImageType.svg;
+    if (startsWith('file:') || startsWith('file://')) return ImageType.file;
+    return ImageType.png;
   }
 }
 
 enum ImageType { svg, png, network, file, unknown }
 
-// ignore_for_file: must_be_immutable
+/// Gold mark shown while an image is loading and when it cannot be shown.
+class ImagePlaceholder extends StatelessWidget {
+  const ImagePlaceholder({super.key, this.width, this.height});
+
+  final double? width;
+  final double? height;
+
+  @override
+  Widget build(BuildContext context) {
+    final shortest = width != null && height != null
+        ? (width! < height! ? width! : height!)
+        : 48.0;
+    final iconSize = shortest.isFinite ? (shortest * 0.42).clamp(18.0, 42.0) : 28.0;
+    return Container(
+      width: width,
+      height: height,
+      color: const Color(0xFF16161C),
+      alignment: Alignment.center,
+      child: Icon(
+        Icons.image_outlined,
+        color: const Color(0xFFD4AF37),
+        size: iconSize,
+      ),
+    );
+  }
+}
+
 class CustomImageWidget extends StatelessWidget {
   const CustomImageWidget({
     super.key,
@@ -34,146 +77,144 @@ class CustomImageWidget extends StatelessWidget {
     this.radius,
     this.margin,
     this.border,
-    this.placeHolder = 'assets/images/no-image.jpg',
+    this.placeHolder = '',
     this.errorWidget,
     this.semanticLabel,
   });
 
-  ///[imageUrl] is required parameter for showing image
   final String? imageUrl;
-
   final double? height;
-
   final double? width;
-
   final BoxFit? fit;
-
   final String placeHolder;
-
   final Color? color;
-
   final Alignment? alignment;
-
   final VoidCallback? onTap;
-
   final BorderRadius? radius;
-
   final EdgeInsetsGeometry? margin;
-
   final BoxBorder? border;
-
-  /// Optional widget to show when the image fails to load.
-  /// If null, a default asset image is shown.
   final Widget? errorWidget;
-
-  /// Semantic label for the image to improve accessibility
   final String? semanticLabel;
 
   @override
   Widget build(BuildContext context) {
-    return alignment != null
-        ? Align(alignment: alignment!, child: _buildWidget())
-        : _buildWidget();
+    final image = _buildWidget();
+    return alignment != null ? Align(alignment: alignment!, child: image) : image;
   }
 
   Widget _buildWidget() {
-    return Padding(
+    final image = Padding(
       padding: margin ?? EdgeInsets.zero,
-      child: InkWell(onTap: onTap, child: _buildCircleImage()),
+      child: _buildCircleImage(),
     );
+    if (onTap == null) return image;
+    return InkWell(onTap: onTap, child: image);
   }
 
-  ///build the image with border radius
-  _buildCircleImage() {
+  Widget _buildCircleImage() {
     if (radius != null) {
       return ClipRRect(
         borderRadius: radius ?? BorderRadius.zero,
         child: _buildImageWithBorder(),
       );
-    } else {
-      return _buildImageWithBorder();
     }
+    return _buildImageWithBorder();
   }
 
-  ///build the image with border and border radius style
-  _buildImageWithBorder() {
+  Widget _buildImageWithBorder() {
     if (border != null) {
       return Container(
         decoration: BoxDecoration(border: border, borderRadius: radius),
         child: _buildImageView(),
       );
-    } else {
-      return _buildImageView();
     }
+    return _buildImageView();
+  }
+
+  Widget _mark() =>
+      errorWidget ?? ImagePlaceholder(width: width, height: height);
+
+  Widget _frame(BuildContext context, Widget child, int? frame, bool sync) {
+    if (sync || frame != null) return child;
+    return _mark();
+  }
+
+  Widget _asset(String path) {
+    return Image.asset(
+      path,
+      height: height,
+      width: width,
+      fit: fit ?? BoxFit.cover,
+      color: color,
+      semanticLabel: semanticLabel,
+      frameBuilder: _frame,
+      errorBuilder: (_, __, ___) => _mark(),
+    );
+  }
+
+  Widget _network(String url) {
+    return Image.network(
+      url,
+      height: height,
+      width: width,
+      fit: fit,
+      color: color,
+      semanticLabel: semanticLabel,
+      // CanvasKit fetches bytes and needs CORS. An <img> element still
+      // paints the picture when R2 does not send Access-Control-Allow-Origin.
+      webHtmlElementStrategy: WebHtmlElementStrategy.fallback,
+      frameBuilder: _frame,
+      loadingBuilder: (context, child, progress) {
+        if (progress == null) return child;
+        return _mark();
+      },
+      errorBuilder: (_, __, ___) {
+        if (placeHolder.isNotEmpty) return _asset(placeHolder);
+        return _mark();
+      },
+    );
   }
 
   Widget _buildImageView() {
-    if (imageUrl != null) {
-      switch (imageUrl!.imageType) {
-        case ImageType.svg:
-          return SizedBox(
+    final raw = imageUrl?.trim() ?? '';
+    if (raw.isEmpty) return _mark();
+    final resolved = resolveMediaUrl(raw);
+
+    switch (raw.imageType) {
+      case ImageType.svg:
+        return SizedBox(
+          height: height,
+          width: width,
+          child: SvgPicture.asset(
+            raw,
             height: height,
             width: width,
-            child: SvgPicture.asset(
-              imageUrl!,
-              height: height,
-              width: width,
-              fit: fit ?? BoxFit.contain,
-              colorFilter: color != null
-                  ? ColorFilter.mode(
-                      color ?? Colors.transparent,
-                      BlendMode.srcIn,
-                    )
-                  : null,
-              semanticsLabel: semanticLabel,
-            ),
-          );
-        case ImageType.file:
-          return Image.file(
-            File(imageUrl!),
-            height: height,
-            width: width,
-            fit: fit ?? BoxFit.cover,
-            color: color,
-            semanticLabel: semanticLabel,
-          );
-        case ImageType.network:
-          return CachedNetworkImage(
-            height: height,
-            width: width,
-            fit: fit,
-            imageUrl: imageUrl!,
-            color: color,
-            placeholder: (context, url) => SizedBox(
-              height: 30,
-              width: 30,
-              child: LinearProgressIndicator(
-                color: Colors.grey.shade200,
-                backgroundColor: Colors.grey.shade100,
-              ),
-            ),
-            errorWidget: (context, url, error) =>
-                errorWidget ??
-                Image.asset(
-                  placeHolder,
-                  height: height,
-                  width: width,
-                  fit: fit ?? BoxFit.cover,
-                  semanticLabel: semanticLabel,
-                ),
-          );
-        case ImageType.png:
-        default:
-          return Image.asset(
-            imageUrl!,
-            height: height,
-            width: width,
-            fit: fit ?? BoxFit.cover,
-            color: color,
-            semanticLabel: semanticLabel,
-          );
-      }
+            fit: fit ?? BoxFit.contain,
+            colorFilter: color != null
+                ? ColorFilter.mode(color ?? Colors.transparent, BlendMode.srcIn)
+                : null,
+            semanticsLabel: semanticLabel,
+            placeholderBuilder: (_) => _mark(),
+            errorBuilder: (_, __, ___) => _mark(),
+          ),
+        );
+      case ImageType.file:
+        final path = raw.startsWith('file://') ? raw.substring(7) : raw;
+        if (kIsWeb) return _network(resolved);
+        return buildLocalFileImage(
+          path: path,
+          height: height,
+          width: width,
+          fit: fit,
+          color: color,
+          semanticLabel: semanticLabel,
+          fallback: _mark(),
+        );
+      case ImageType.network:
+        return _network(resolved);
+      case ImageType.png:
+      case ImageType.unknown:
+        return _asset(raw);
     }
-    return SizedBox();
   }
 }

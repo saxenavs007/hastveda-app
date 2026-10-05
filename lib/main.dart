@@ -25,6 +25,7 @@ import './services/theme_provider.dart';
 import './theme/app_theme.dart';
 import './widgets/app_error_boundary.dart';
 import './widgets/connectivity_banner.dart';
+import './widgets/custom_image_widget.dart';
 import './widgets/hastveda_error_widget.dart';
 
 void main() async {
@@ -201,8 +202,8 @@ class _SupabaseErrorApp extends StatelessWidget {
                 children: [
                   ClipRRect(
                     borderRadius: BorderRadius.circular(20),
-                    child: Image.asset(
-                      'assets/images/hastveda_logo.png',
+                    child: const CustomImageWidget(
+                      imageUrl: 'assets/images/hastveda_logo.png',
                       width: 80,
                       height: 80,
                       fit: BoxFit.contain,

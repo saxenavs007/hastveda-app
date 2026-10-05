@@ -8,6 +8,7 @@ import '../../services/app_strings.dart';
 import '../../services/locale_provider.dart';
 import '../../services/analytics_service.dart';
 import '../../theme/app_theme.dart';
+import '../../widgets/custom_image_widget.dart';
 
 class OnboardingScreen extends StatefulWidget {
   const OnboardingScreen({super.key});
@@ -227,8 +228,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   ),
                   child: ClipRRect(
                     borderRadius: BorderRadius.circular(9),
-                    child: Image.asset(
-                      'assets/images/hastveda_logo.png',
+                    child: const CustomImageWidget(
+                      imageUrl: 'assets/images/hastveda_logo.png',
                       fit: BoxFit.contain,
                     ),
                   ),
@@ -284,12 +285,10 @@ class _OnboardingPageView extends StatelessWidget {
     return Stack(
       fit: StackFit.expand,
       children: [
-        Image.asset(
-          page.imageAsset,
+        CustomImageWidget(
+          imageUrl: page.imageAsset,
           fit: BoxFit.cover,
           semanticLabel: page.semanticLabel,
-          errorBuilder: (_, __, ___) =>
-              Container(color: AppTheme.backgroundDark),
         ),
         // Subtle particle-dimming layer
         Container(color: const Color(0xFF0A0A0F).withAlpha(28)),

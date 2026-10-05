@@ -1,3 +1,6 @@
+import 'dart:async';
+
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_tts/flutter_tts.dart';
 import 'package:go_router/go_router.dart';
@@ -11,6 +14,7 @@ import '../../services/indian_tts.dart';
 import '../../services/app_strings.dart';
 import '../../services/error_logger.dart';
 import '../../services/locale_provider.dart';
+import '../../services/web_speech.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/hastveda_error_widget.dart';
 
@@ -643,7 +647,11 @@ class _DetailedReadingScreenState extends State<DetailedReadingScreen> {
 
   @override
   void dispose() {
-    _tts.stop();
+    if (kIsWeb) {
+      WebSpeech.stop();
+    } else {
+      _tts.stop();
+    }
     super.dispose();
   }
 
@@ -655,19 +663,61 @@ class _DetailedReadingScreenState extends State<DetailedReadingScreen> {
     final code = context.watch<LocaleProvider>().languageCode;
     if (_localeCode != null && _localeCode != code && _isSpeaking) {
       _isSpeaking = false;
-      _tts.stop();
+      if (kIsWeb) {
+        WebSpeech.stop();
+      } else {
+        _tts.stop();
+      }
     }
     _localeCode = code;
   }
 
-  Future<void> _speakSummary(String title, String summary) async {
+  void _speakSummary(String title, String summary) {
     if (_isSpeaking) {
-      await _tts.stop();
+      if (kIsWeb) {
+        WebSpeech.stop();
+      } else {
+        _tts.stop();
+      }
       if (mounted) setState(() => _isSpeaking = false);
       return;
     }
-    final script = [title, summary].where((part) => part.trim().isNotEmpty).join('. ');
+    final script = [title, summary]
+        .where((part) => part.trim().isNotEmpty)
+        .join('. ');
     if (script.isEmpty) return;
+
+    if (kIsWeb) {
+      setState(() => _isSpeaking = true);
+      final started = WebSpeech.speak(
+        text: script,
+        hindi: _isHindi,
+        onDone: () {
+          if (mounted) setState(() => _isSpeaking = false);
+        },
+        onError: (_) {
+          if (!mounted) return;
+          setState(() => _isSpeaking = false);
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                _isHindi
+                    ? 'आवाज़ इस ब्राउज़र में नहीं चल सकी। फिर से टैप करें।'
+                    : 'Speech could not play. Tap the speaker again.',
+              ),
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        },
+      );
+      if (!started && mounted) setState(() => _isSpeaking = false);
+      return;
+    }
+
+    unawaited(_speakSummaryNative(script));
+  }
+
+  Future<void> _speakSummaryNative(String script) async {
     try {
       await _tts.awaitSpeakCompletion(true);
       await IndianTts.apply(_tts, hindi: _isHindi);
@@ -676,7 +726,14 @@ class _DetailedReadingScreenState extends State<DetailedReadingScreen> {
       await _tts.speak(script);
       if (mounted) setState(() => _isSpeaking = false);
     } catch (_) {
-      if (mounted) setState(() => _isSpeaking = false);
+      if (!mounted) return;
+      setState(() => _isSpeaking = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Could not play audio. Please try again.'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
     }
   }
 

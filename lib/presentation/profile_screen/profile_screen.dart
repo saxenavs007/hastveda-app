@@ -1287,6 +1287,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                   await Supabase.instance.client.auth
                                       .resetPasswordForEmail(
                                         emailCtrl.text.trim(),
+                                        redirectTo:
+                                            AppRoutes.passwordResetRedirect,
                                       );
                                   setSheetState(() {
                                     sending = false;

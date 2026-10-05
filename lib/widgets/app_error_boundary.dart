@@ -9,6 +9,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../routes/app_routes.dart';
 import '../services/error_logger.dart';
 import '../theme/app_theme.dart';
+import 'custom_image_widget.dart';
 
 class AppErrorBoundary extends StatefulWidget {
   final Widget child;
@@ -101,8 +102,8 @@ class _HastVedaFallbackScreen extends StatelessWidget {
                   ),
                   child: ClipRRect(
                     borderRadius: BorderRadius.circular(16),
-                    child: Image.asset(
-                      'assets/images/hastveda_logo.png',
+                    child: const CustomImageWidget(
+                      imageUrl: 'assets/images/hastveda_logo.png',
                       fit: BoxFit.contain,
                     ),
                   ),

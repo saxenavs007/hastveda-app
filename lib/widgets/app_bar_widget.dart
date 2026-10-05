@@ -3,6 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 
 import './custom_icon_widget.dart';
+import './custom_image_widget.dart';
 import '../theme/app_theme.dart';
 import '../services/theme_provider.dart';
 
@@ -87,8 +88,8 @@ class AppBarWidget extends StatelessWidget implements PreferredSizeWidget {
                         ),
                         child: ClipRRect(
                           borderRadius: BorderRadius.circular(7),
-                          child: Image.asset(
-                            'assets/images/hastveda_logo.png',
+                          child: const CustomImageWidget(
+                            imageUrl: 'assets/images/hastveda_logo.png',
                             fit: BoxFit.contain,
                           ),
                         ),

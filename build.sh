@@ -9,4 +9,4 @@ export PATH="$PATH:$(pwd)/_flutter/bin"
 
 flutter --version
 flutter pub get
-flutter build web --release
+flutter build web --release --base-href /
