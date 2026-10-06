@@ -25,7 +25,15 @@ class LocaleProvider extends ChangeNotifier {
   }
 
   Future<void> _loadLocale() async {
-    final prefs = await SharedPreferences.getInstance();
+    late final SharedPreferences prefs;
+    try {
+      prefs = await SharedPreferences.getInstance().timeout(
+        const Duration(seconds: 4),
+      );
+    } catch (e) {
+      debugPrint('Locale load skipped: $e');
+      return;
+    }
     final code = prefs.getString(_key) ?? 'en';
     _locale = _localeFromCode(code);
     notifyListeners();

@@ -2,9 +2,8 @@
 // Provider-independent abstraction for real Gemini-powered palm analysis.
 // All AI calls go through Supabase Edge Functions — API key never reaches client.
 
-import 'dart:convert';
-import 'dart:io';
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -526,7 +525,6 @@ PalmFailureReason palmFailureReasonOf(Object e) {
   if (e is ImageQualityException) return e.reason;
   if (e is FreeScanLimitException) return PalmFailureReason.freeLimitReached;
   if (e is TimeoutException) return PalmFailureReason.aiTimeout;
-  if (e is SocketException) return PalmFailureReason.networkError;
 
   final code = palmAnalysisErrorCode(e);
   if (code != null) {
@@ -643,17 +641,6 @@ class PalmAnalysisService {
       scanId: scanId,
       imageBytes: imageBytes,
       fileName: fileName,
-    );
-  }
-
-  Future<String?> uploadPalmImageFile({
-    required String scanId,
-    required File imageFile,
-  }) async {
-    return await _supabase.uploadPalmImageFile(
-      scanId: scanId,
-      imageFile: imageFile,
-      fileName: 'palm_${DateTime.now().millisecondsSinceEpoch}.jpg',
     );
   }
 

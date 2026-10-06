@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../routes/app_routes.dart';
+import '../../startup.dart';
 import '../../services/theme_provider.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/custom_image_widget.dart';
@@ -40,13 +41,30 @@ class _SplashScreenState extends State<SplashScreen>
   }
 
   Future<void> _navigate() async {
-    await Future.delayed(const Duration(milliseconds: 2400));
+    try {
+      await startupReady.timeout(const Duration(seconds: 8));
+    } catch (e) {
+      debugPrint('Splash continued after startup gave up: $e');
+    }
+    try {
+      await Future.delayed(
+        const Duration(milliseconds: 2400),
+      ).timeout(const Duration(seconds: 5));
+    } catch (e) {
+      debugPrint('Splash delay skipped: $e');
+    }
     if (!mounted) return;
-    final session = Supabase.instance.client.auth.currentSession;
-    if (session != null) {
-      context.go(AppRoutes.homeScreen);
-    } else {
-      context.go(AppRoutes.onboarding);
+    try {
+      final session = Supabase.instance.client.auth.currentSession;
+      if (!mounted) return;
+      if (session != null) {
+        context.go(AppRoutes.homeScreen);
+      } else {
+        context.go(AppRoutes.onboarding);
+      }
+    } catch (e) {
+      debugPrint('Splash continued without a backend session: $e');
+      if (mounted) context.go(AppRoutes.onboarding);
     }
   }
 

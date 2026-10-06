@@ -4,7 +4,6 @@
 // No mock data. All AI calls are server-side via Supabase Edge Function.
 
 import 'dart:convert';
-import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -24,6 +23,7 @@ import '../../services/error_logger.dart';
 import '../../services/locale_provider.dart';
 import '../../services/supabase_service.dart';
 import '../../theme/app_theme.dart';
+import '../../widgets/device_photo.dart';
 import '../../widgets/premium_lock_widget.dart';
 
 // ── Analysis stage for couple reading ────────────────────────────────────────
@@ -906,7 +906,7 @@ class _PersonScanTab extends StatelessWidget {
                                 size: 48,
                               ),
                             )
-                          : Image.file(File(image!.path), fit: BoxFit.cover),
+                          : devicePhoto(image!.path),
                     )
                   : Column(
                       mainAxisAlignment: MainAxisAlignment.center,

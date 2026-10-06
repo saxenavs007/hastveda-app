@@ -17,20 +17,32 @@ class ConnectivityService extends ChangeNotifier {
   StreamSubscription<List<ConnectivityResult>>? _subscription;
 
   void _init() {
-    // Check initial state
-    Connectivity().checkConnectivity().then((results) {
-      _isOnline = _resultsToOnline(results);
-      notifyListeners();
-    });
-
-    // Listen for changes
-    _subscription = Connectivity().onConnectivityChanged.listen((results) {
-      final wasOnline = _isOnline;
-      _isOnline = _resultsToOnline(results);
-      if (wasOnline != _isOnline) {
+    try {
+      Connectivity()
+          .checkConnectivity()
+          .timeout(const Duration(seconds: 4))
+          .then((results) {
+        _isOnline = _resultsToOnline(results);
         notifyListeners();
-      }
-    });
+      }).catchError((Object error) {
+        debugPrint('Connectivity check skipped: $error');
+      });
+
+      _subscription = Connectivity().onConnectivityChanged.listen(
+        (results) {
+          final wasOnline = _isOnline;
+          _isOnline = _resultsToOnline(results);
+          if (wasOnline != _isOnline) {
+            notifyListeners();
+          }
+        },
+        onError: (Object error) {
+          debugPrint('Connectivity listener skipped: $error');
+        },
+      );
+    } catch (e) {
+      debugPrint('Connectivity init skipped: $e');
+    }
   }
 
   bool _resultsToOnline(List<ConnectivityResult> results) {

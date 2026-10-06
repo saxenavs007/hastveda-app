@@ -8,8 +8,6 @@
 // Writes are best-effort by design — a diagnostics failure must never turn into
 // a second user-visible error.
 
-import 'dart:io' show Platform;
-
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -22,15 +20,7 @@ const String kAppVersion = '1.0.0';
 /// Device model string, best-effort and without adding a plugin dependency.
 String? get _deviceModel {
   if (kIsWeb) return 'web';
-  try {
-    // e.g. "Version 16 (API 36)" on Android — enough to spot a device-specific
-    // capture problem when several failures share one model.
-    return Platform.operatingSystemVersion.length > 80
-        ? Platform.operatingSystemVersion.substring(0, 80)
-        : Platform.operatingSystemVersion;
-  } catch (_) {
-    return null;
-  }
+  return defaultTargetPlatform.name;
 }
 
 class PalmFailureLogger {

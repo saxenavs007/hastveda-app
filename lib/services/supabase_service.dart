@@ -1,5 +1,3 @@
-import 'dart:io';
-
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -401,6 +399,12 @@ class SupabaseService {
   SupabaseService._();
 
   static Future<void> initialize() async {
+    try {
+      Supabase.instance.client;
+      return;
+    } catch (_) {
+      // Not initialized yet.
+    }
     final url = SupabaseConfig.url;
     final anonKey = SupabaseConfig.anonKey;
 
@@ -761,30 +765,6 @@ class SupabaseService {
       return path;
     } catch (e) {
       debugPrint('uploadPalmImage error: $e');
-      return null;
-    }
-  }
-
-  /// Upload palm image from file (mobile)
-  Future<String?> uploadPalmImageFile({
-    required String scanId,
-    required File imageFile,
-    required String fileName,
-  }) async {
-    final userId = currentUserId;
-    if (userId == null) return null;
-    try {
-      final path = '$userId/$scanId/$fileName';
-      await client.storage
-          .from('palm-images')
-          .upload(
-            path,
-            imageFile,
-            fileOptions: const FileOptions(upsert: true),
-          );
-      return path;
-    } catch (e) {
-      debugPrint('uploadPalmImageFile error: $e');
       return null;
     }
   }

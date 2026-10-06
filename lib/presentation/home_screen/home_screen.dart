@@ -53,39 +53,7 @@ class _HomeScreenState extends State<HomeScreen> {
       _loadError = null;
     });
     try {
-      final userId = Supabase.instance.client.auth.currentUser?.id;
-      if (userId != null) {
-        // Force-refresh entitlements on every home screen load so Premium
-        // state is always current (handles post-payment, post-login cases).
-        final isPremium = await EntitlementService.instance.isPremiumUser(
-          forceRefresh: true,
-        );
-
-        final profile = await SupabaseService.instance.client
-            .from('user_profiles')
-            .select()
-            .eq('id', userId)
-            .maybeSingle();
-
-        final readings = await SupabaseService.instance.client
-            .from('reading_history')
-            .select()
-            .eq('user_id', userId)
-            .order('created_at', ascending: false)
-            .limit(3);
-
-        if (mounted) {
-          final livePremium = context.read<EntitlementNotifier>().isPremium;
-          setState(() {
-            _isPremium = isPremium || livePremium;
-            _userProfile = profile;
-            _recentReadings = List<Map<String, dynamic>>.from(readings);
-            _isLoading = false;
-          });
-        }
-      } else {
-        if (mounted) setState(() => _isLoading = false);
-      }
+      await _readHome().timeout(const Duration(seconds: 12));
     } catch (e) {
       debugPrint('Home load error: $e');
       if (mounted) {
@@ -95,6 +63,42 @@ class _HomeScreenState extends State<HomeScreen> {
         });
       }
     }
+  }
+
+  Future<void> _readHome() async {
+    final userId = Supabase.instance.client.auth.currentUser?.id;
+    if (userId == null) {
+      if (mounted) setState(() => _isLoading = false);
+      return;
+    }
+
+    // Force-refresh entitlements on every home screen load so Premium
+    // state is always current (handles post-payment, post-login cases).
+    final isPremium = await EntitlementService.instance.isPremiumUser(
+      forceRefresh: true,
+    );
+
+    final profile = await SupabaseService.instance.client
+        .from('user_profiles')
+        .select()
+        .eq('id', userId)
+        .maybeSingle();
+
+    final readings = await SupabaseService.instance.client
+        .from('reading_history')
+        .select()
+        .eq('user_id', userId)
+        .order('created_at', ascending: false)
+        .limit(3);
+
+    if (!mounted) return;
+    final livePremium = context.read<EntitlementNotifier>().isPremium;
+    setState(() {
+      _isPremium = isPremium || livePremium;
+      _userProfile = profile;
+      _recentReadings = List<Map<String, dynamic>>.from(readings);
+      _isLoading = false;
+    });
   }
 
   String _greeting(AppStrings s) {
@@ -109,8 +113,12 @@ class _HomeScreenState extends State<HomeScreen> {
     if (name != null && name.isNotEmpty) {
       return name.split(' ').first;
     }
-    final email = Supabase.instance.client.auth.currentUser?.email;
-    if (email != null) return email.split('@').first;
+    try {
+      final email = Supabase.instance.client.auth.currentUser?.email;
+      if (email != null) return email.split('@').first;
+    } catch (e) {
+      debugPrint('Home name fallback: $e');
+    }
     return 'Guest';
   }
 

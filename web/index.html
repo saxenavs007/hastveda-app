@@ -180,14 +180,23 @@
         }
       }
 
+      function isFlutterFailure(source, message) {
+        var text = String(source || "") + "\n" + String(message || "");
+        return /flutter_bootstrap|main\.dart\.js|dart_sdk|canvaskit|flutter\.js/i.test(
+          text,
+        );
+      }
+
       function showLoadError(message, detail) {
         if (appLoaded) return;
-        appLoaded = true;
         removeLoader();
         var errEl = document.getElementById("load-error");
         if (errEl) {
           errEl.classList.add("visible");
+          var paragraph = errEl.querySelector("p");
+          if (paragraph && message) paragraph.textContent = String(message);
         }
+        if (detail) console.error("[HastVeda] startup failed", detail);
         window.parent.postMessage(
           { type: "LOADING_ERROR", message: message },
           "*",
@@ -196,13 +205,15 @@
       }
 
       window.addEventListener("flutter-first-frame", function () {
-        if (appLoaded) return;
         appLoaded = true;
         removeLoader();
+        var errEl = document.getElementById("load-error");
+        if (errEl) errEl.classList.remove("visible");
         window.parent.postMessage({ type: "LOADING_COMPLETED" }, "*");
       });
 
       window.onerror = function (message, source, lineno, colno, error) {
+        if (!isFlutterFailure(source, message)) return false;
         var detail = [
           message,
           source ? source + ":" + lineno + ":" + colno : "",
@@ -217,16 +228,25 @@
       window.addEventListener("unhandledrejection", function (event) {
         var reason = event.reason;
         var msg = reason && (reason.message || String(reason));
-        var stack = reason && reason.stack;
+        var stack = (reason && reason.stack) || "";
+        if (!isFlutterFailure(stack, msg)) return;
         showLoadError(
           msg || "Unhandled error",
           stack && stack !== msg ? stack : null,
         );
       });
 
-      // If first frame or error does not happen within 90s, stop loader and show message
+      // If the engine never paints, stop the loader. A Flutter view that is
+      // already on the page should open the app instead of the error panel.
       setTimeout(function () {
         if (appLoaded) return;
+        if (document.querySelector("flutter-view")) {
+          appLoaded = true;
+          removeLoader();
+          var errEl = document.getElementById("load-error");
+          if (errEl) errEl.classList.remove("visible");
+          return;
+        }
         var loader = document.getElementById("loading-container");
         if (loader && loader.style.display !== "none") {
           showLoadError(

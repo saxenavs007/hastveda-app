@@ -32,7 +32,15 @@ class ThemeProvider extends ChangeNotifier {
   }
 
   Future<void> _loadTheme() async {
-    final prefs = await SharedPreferences.getInstance();
+    late final SharedPreferences prefs;
+    try {
+      prefs = await SharedPreferences.getInstance().timeout(
+        const Duration(seconds: 4),
+      );
+    } catch (e) {
+      debugPrint('Theme load skipped: $e');
+      return;
+    }
     final saved = prefs.getString(_key);
     if (saved == 'light') {
       _themeMode = ThemeMode.light;
