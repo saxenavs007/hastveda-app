@@ -15,6 +15,7 @@ import '../../services/speech_text.dart';
 import '../../services/app_strings.dart';
 import '../../services/error_logger.dart';
 import '../../services/locale_provider.dart';
+import '../../services/reading_narration.dart';
 import '../../services/web_speech.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/hastveda_error_widget.dart';
@@ -135,6 +136,15 @@ class _ReadingHistoryScreenState extends State<ReadingHistoryScreen> {
         });
       }
     }
+  }
+
+  String _readingNarration(Map<String, dynamic> reading, bool hindi) {
+    final title = (reading['title'] as String?)?.trim();
+    final summary = (reading['summary'] as String?)?.trim() ?? '';
+    final heading = title != null && title.isNotEmpty
+        ? title
+        : (hindi ? 'हस्तरेखा पठन' : 'Palm Reading');
+    return [heading, summary].where((part) => part.isNotEmpty).join('. ');
   }
 
   // Single readings only (not couple) for comparison
@@ -394,9 +404,39 @@ class _ReadingHistoryScreenState extends State<ReadingHistoryScreen> {
                               final currentLocale = context
                                   .read<LocaleProvider>()
                                   .languageCode;
+                              var autoSpeak = true;
+                              if (kIsWeb) {
+                                final script = _readingNarration(
+                                  reading,
+                                  currentLocale == 'hi',
+                                );
+                                if (script.isNotEmpty) {
+                                  final started = WebSpeech.speak(
+                                    text: script,
+                                    hindi: currentLocale == 'hi',
+                                    onDone: () => ReadingNarration.instance
+                                        .setSpeaking(false),
+                                    onError: (message) {
+                                      debugPrint(
+                                        'Reading TTS autoplay failed: $message',
+                                      );
+                                      ReadingNarration.instance.setSpeaking(
+                                        false,
+                                      );
+                                    },
+                                  );
+                                  if (started) {
+                                    ReadingNarration.instance.setSpeaking(true);
+                                    autoSpeak = false;
+                                  }
+                                }
+                              }
                               context.push(
                                 '${AppRoutes.detailedReading}?locale=$currentLocale',
-                                extra: {'readingId': reading['id']},
+                                extra: {
+                                  'readingId': reading['id'],
+                                  'autoSpeak': autoSpeak,
+                                },
                               );
                             }
                           },
@@ -617,8 +657,14 @@ class _ReadingHistoryScreenState extends State<ReadingHistoryScreen> {
 class DetailedReadingScreen extends StatefulWidget {
   final String? readingId;
   final String locale;
+  final bool autoSpeak;
 
-  const DetailedReadingScreen({super.key, this.readingId, this.locale = 'en'});
+  const DetailedReadingScreen({
+    super.key,
+    this.readingId,
+    this.locale = 'en',
+    this.autoSpeak = true,
+  });
 
   @override
   State<DetailedReadingScreen> createState() => _DetailedReadingScreenState();
@@ -628,13 +674,13 @@ class _DetailedReadingScreenState extends State<DetailedReadingScreen> {
   bool _isLoading = true;
   bool _isSpeaking = false;
   bool _speakingChunks = false;
+  bool _autoSpeakDone = false;
   int _speakGeneration = 0;
   Map<String, dynamic>? _reading;
   final FlutterTts _tts = FlutterTts();
   // Always derive language from the live provider so the reading detail
   // reflects the current app language, not the route parameter default.
   bool get _isHindi => context.read<LocaleProvider>().languageCode == 'hi';
-  String get _currentLocale => context.read<LocaleProvider>().languageCode;
 
   @override
   void initState() {
@@ -647,18 +693,43 @@ class _DetailedReadingScreenState extends State<DetailedReadingScreen> {
       if (_speakingChunks || !mounted) return;
       setState(() => _isSpeaking = false);
     });
+    _tts.setErrorHandler((message) {
+      debugPrint('Reading detail TTS error: $message');
+      if (_speakingChunks || !mounted) return;
+      setState(() => _isSpeaking = false);
+    });
+    if (!widget.autoSpeak) {
+      ReadingNarration.instance.addListener(_syncNarration);
+      _isSpeaking = ReadingNarration.instance.speaking;
+    }
     _loadReading();
+  }
+
+  void _syncNarration() {
+    if (!mounted) return;
+    final speaking = ReadingNarration.instance.speaking;
+    if (speaking == _isSpeaking) return;
+    setState(() => _isSpeaking = speaking);
   }
 
   @override
   void dispose() {
+    if (!widget.autoSpeak) {
+      ReadingNarration.instance.removeListener(_syncNarration);
+    }
+    _haltSpeech();
+    super.dispose();
+  }
+
+  void _haltSpeech() {
     _speakGeneration++;
+    _speakingChunks = false;
     if (kIsWeb) {
       WebSpeech.stop();
+      ReadingNarration.instance.setSpeaking(false);
     } else {
       _tts.stop();
     }
-    super.dispose();
   }
 
   String? _localeCode;
@@ -669,26 +740,14 @@ class _DetailedReadingScreenState extends State<DetailedReadingScreen> {
     final code = context.watch<LocaleProvider>().languageCode;
     if (_localeCode != null && _localeCode != code && _isSpeaking) {
       _isSpeaking = false;
-      _speakGeneration++;
-      _speakingChunks = false;
-      if (kIsWeb) {
-        WebSpeech.stop();
-      } else {
-        _tts.stop();
-      }
+      _haltSpeech();
     }
     _localeCode = code;
   }
 
   void _speakSummary(String title, String summary) {
     if (_isSpeaking) {
-      _speakGeneration++;
-      _speakingChunks = false;
-      if (kIsWeb) {
-        WebSpeech.stop();
-      } else {
-        _tts.stop();
-      }
+      _haltSpeech();
       if (mounted) setState(() => _isSpeaking = false);
       return;
     }
@@ -696,38 +755,57 @@ class _DetailedReadingScreenState extends State<DetailedReadingScreen> {
         .where((part) => part.trim().isNotEmpty)
         .join('. ');
     if (script.isEmpty) return;
+    _autoSpeakDone = true;
+    _startSpeech(script, automatic: false);
+  }
 
+  void _scheduleAutoSpeak() {
+    if (!widget.autoSpeak || _autoSpeakDone) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || _autoSpeakDone || _isSpeaking) return;
+      final title =
+          _reading?['title'] as String? ??
+          (_isHindi ? 'हस्तरेखा पठन' : 'Palm Reading');
+      final summary = _reading?['summary'] as String? ?? '';
+      final script = [title, summary]
+          .where((part) => part.trim().isNotEmpty)
+          .join('. ');
+      if (script.isEmpty) return;
+      _autoSpeakDone = true;
+      _startSpeech(script, automatic: true);
+    });
+  }
+
+  void _startSpeech(String script, {required bool automatic}) {
     if (kIsWeb) {
       setState(() => _isSpeaking = true);
+      ReadingNarration.instance.setSpeaking(true);
       final started = WebSpeech.speak(
         text: script,
         hindi: _isHindi,
         onDone: () {
+          ReadingNarration.instance.setSpeaking(false);
           if (mounted) setState(() => _isSpeaking = false);
         },
-        onError: (_) {
-          if (!mounted) return;
-          setState(() => _isSpeaking = false);
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                _isHindi
-                    ? 'आवाज़ इस ब्राउज़र में नहीं चल सकी। फिर से टैप करें।'
-                    : 'Speech could not play. Tap the speaker again.',
-              ),
-              behavior: SnackBarBehavior.floating,
-            ),
-          );
+        onError: (message) {
+          ReadingNarration.instance.setSpeaking(false);
+          _reportSpeechFailure(message, automatic: automatic);
         },
       );
-      if (!started && mounted) setState(() => _isSpeaking = false);
+      if (!started) {
+        ReadingNarration.instance.setSpeaking(false);
+        if (mounted) setState(() => _isSpeaking = false);
+      }
       return;
     }
 
-    unawaited(_speakSummaryNative(script));
+    unawaited(_speakSummaryNative(script, automatic: automatic));
   }
 
-  Future<void> _speakSummaryNative(String script) async {
+  Future<void> _speakSummaryNative(
+    String script, {
+    required bool automatic,
+  }) async {
     final generation = ++_speakGeneration;
     try {
       await _tts.awaitSpeakCompletion(true);
@@ -746,17 +824,36 @@ class _DetailedReadingScreenState extends State<DetailedReadingScreen> {
       if (mounted && generation == _speakGeneration) {
         setState(() => _isSpeaking = false);
       }
-    } catch (_) {
+    } catch (e) {
       _speakingChunks = false;
-      if (!mounted) return;
-      setState(() => _isSpeaking = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Could not play audio. Please try again.'),
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
+      _reportSpeechFailure('$e', automatic: automatic);
     }
+  }
+
+  void _reportSpeechFailure(String message, {required bool automatic}) {
+    debugPrint('Reading detail TTS failed: $message');
+    unawaited(
+      errorLogger.log(
+        category: ErrorCategory.ui,
+        operation: automatic ? 'reading_tts_autoplay' : 'reading_tts',
+        userMessage: 'Could not play the reading aloud.',
+        error: message,
+        severity: ErrorSeverity.low,
+      ),
+    );
+    if (!mounted) return;
+    setState(() => _isSpeaking = false);
+    if (automatic) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          _isHindi
+              ? 'आवाज़ नहीं चल सकी। फिर से कोशिश करें।'
+              : 'Could not play audio. Please try again.',
+        ),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
   }
 
   Future<void> _loadReading() async {
@@ -775,9 +872,16 @@ class _DetailedReadingScreenState extends State<DetailedReadingScreen> {
           _reading = data;
           _isLoading = false;
         });
+        if (data != null) _scheduleAutoSpeak();
       }
     } catch (e) {
       debugPrint('DetailedReadingScreen load error: $e');
+      unawaited(
+        errorLogger.logSupabaseError(
+          operation: 'load_detailed_reading',
+          error: e,
+        ),
+      );
       if (mounted) setState(() => _isLoading = false);
     }
   }
@@ -789,7 +893,6 @@ class _DetailedReadingScreenState extends State<DetailedReadingScreen> {
     final currentLocale = localeProvider.languageCode;
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final bgColor = isDark ? AppTheme.backgroundDark : AppTheme.backgroundLight;
-    final textColor = isDark ? AppTheme.textPrimary : AppTheme.textPrimaryLight;
 
     final createdAt = _reading?['created_at'] != null
         ? DateTime.tryParse(_reading!['created_at'] as String)
@@ -939,10 +1042,14 @@ class _DetailedReadingScreenState extends State<DetailedReadingScreen> {
                     SizedBox(
                       width: double.infinity,
                       child: ElevatedButton.icon(
-                        onPressed: () => context.push(
-                          '${AppRoutes.palmAnalysis}?locale=$currentLocale',
-                          extra: {'analysis_id': analysisId},
-                        ),
+                        onPressed: () {
+                          _haltSpeech();
+                          if (mounted) setState(() => _isSpeaking = false);
+                          context.push(
+                            '${AppRoutes.palmAnalysis}?locale=$currentLocale',
+                            extra: {'analysis_id': analysisId},
+                          );
+                        },
                         icon: const Icon(Icons.back_hand_rounded, size: 18),
                         label: Text(
                           _isHindi

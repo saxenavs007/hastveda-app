@@ -14,6 +14,7 @@ import '../../services/indian_tts.dart';
 import '../../services/speech_text.dart';
 import '../../services/entitlement_notifier.dart';
 import '../../services/entitlement_service.dart';
+import '../../services/error_logger.dart';
 import '../../services/locale_provider.dart';
 import '../../services/pdf_export_service.dart';
 import '../../services/web_speech.dart';
@@ -52,6 +53,7 @@ class _PalmAnalysisScreenState extends State<PalmAnalysisScreen> {
   bool _hasPremium = false;
   bool _isSpeaking = false;
   bool _speakingChunks = false;
+  bool _autoSpeakDone = false;
   int _speakGeneration = 0;
   bool _isExportingPdf = false;
   final FlutterTts _tts = FlutterTts();
@@ -81,6 +83,8 @@ class _PalmAnalysisScreenState extends State<PalmAnalysisScreen> {
     // If no analysisData passed but analysisId is provided, load from DB
     if (widget.analysisData == null && widget.analysisId != null) {
       _loadAnalysisFromDb(widget.analysisId!);
+    } else if (widget.analysisData != null) {
+      _scheduleAutoSpeak();
     }
     _loadEntitlement();
   }
@@ -119,7 +123,11 @@ class _PalmAnalysisScreenState extends State<PalmAnalysisScreen> {
     setState(() => _isLoadingFromDb = true);
     try {
       final userId = Supabase.instance.client.auth.currentUser?.id;
-      if (userId == null) return;
+      if (userId == null) {
+        debugPrint('PalmAnalysisScreen load skipped: signed out');
+        if (mounted) setState(() => _isLoadingFromDb = false);
+        return;
+      }
       final data = await Supabase.instance.client
           .from('palm_analysis')
           .select()
@@ -131,11 +139,18 @@ class _PalmAnalysisScreenState extends State<PalmAnalysisScreen> {
           _loadedData = _buildDataFromDbRecord(data);
           _isLoadingFromDb = false;
         });
+        _scheduleAutoSpeak();
       } else {
         if (mounted) setState(() => _isLoadingFromDb = false);
       }
     } catch (e) {
       debugPrint('PalmAnalysisScreen load error: $e');
+      unawaited(
+        errorLogger.logSupabaseError(
+          operation: 'load_palm_reading',
+          error: e,
+        ),
+      );
       if (mounted) setState(() => _isLoadingFromDb = false);
     }
   }
@@ -314,6 +329,17 @@ class _PalmAnalysisScreenState extends State<PalmAnalysisScreen> {
     return parts.join('\n\n');
   }
 
+  void _scheduleAutoSpeak() {
+    if (_autoSpeakDone) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || _autoSpeakDone || _isSpeaking) return;
+      final script = _readingScript();
+      if (script.trim().isEmpty) return;
+      _autoSpeakDone = true;
+      _beginSpeech(script, automatic: true);
+    });
+  }
+
   void _speakReading() {
     if (_isSpeaking) {
       _stopSpeaking();
@@ -327,9 +353,13 @@ class _PalmAnalysisScreenState extends State<PalmAnalysisScreen> {
       );
       return;
     }
+    _autoSpeakDone = true;
+    _beginSpeech(script, automatic: false);
+  }
 
-    // Browser speech must start inside this tap. Any await before speak()
-    // drops the user gesture and Safari/Chrome block audio.
+  void _beginSpeech(String script, {required bool automatic}) {
+    // A manual tap can start browser speech immediately. Automatic playback
+    // starts once the reading is on screen; mobile TTS does not need the tap.
     if (kIsWeb) {
       setState(() => _isSpeaking = true);
       final started = WebSpeech.speak(
@@ -339,23 +369,20 @@ class _PalmAnalysisScreenState extends State<PalmAnalysisScreen> {
           if (mounted) setState(() => _isSpeaking = false);
         },
         onError: (message) {
-          if (!mounted) return;
-          setState(() => _isSpeaking = false);
-          _showSpeakError(
-            _isHindi
-                ? 'आवाज़ इस ब्राउज़र में नहीं चल सकी। फिर से टैप करें।'
-                : message,
-          );
+          _reportSpeechFailure(message, automatic: automatic);
         },
       );
       if (!started && mounted) setState(() => _isSpeaking = false);
       return;
     }
 
-    unawaited(_speakReadingNative(script));
+    unawaited(_speakReadingNative(script, automatic: automatic));
   }
 
-  Future<void> _speakReadingNative(String script) async {
+  Future<void> _speakReadingNative(
+    String script, {
+    required bool automatic,
+  }) async {
     final generation = ++_speakGeneration;
     try {
       await _tts.awaitSpeakCompletion(true);
@@ -376,15 +403,29 @@ class _PalmAnalysisScreenState extends State<PalmAnalysisScreen> {
       }
     } catch (e) {
       _speakingChunks = false;
-      debugPrint('Reading TTS failed: $e');
-      if (!mounted) return;
-      setState(() => _isSpeaking = false);
-      _showSpeakError(
-        _isHindi
-            ? 'आवाज़ नहीं चल सकी। फिर से कोशिश करें।'
-            : 'Could not play audio. Please try again.',
-      );
+      _reportSpeechFailure('$e', automatic: automatic);
     }
+  }
+
+  void _reportSpeechFailure(String message, {required bool automatic}) {
+    debugPrint('Reading TTS failed: $message');
+    unawaited(
+      errorLogger.log(
+        category: ErrorCategory.ui,
+        operation: automatic ? 'reading_tts_autoplay' : 'reading_tts',
+        userMessage: 'Could not play the reading aloud.',
+        error: message,
+        severity: ErrorSeverity.low,
+      ),
+    );
+    if (!mounted) return;
+    setState(() => _isSpeaking = false);
+    if (automatic) return;
+    _showSpeakError(
+      _isHindi
+          ? 'आवाज़ नहीं चल सकी। फिर से कोशिश करें।'
+          : 'Could not play audio. Please try again.',
+    );
   }
 
   Future<void> _downloadReadingPdf() async {

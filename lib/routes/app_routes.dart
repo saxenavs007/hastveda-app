@@ -555,6 +555,7 @@ final GoRouter appRouter = GoRouter(
           DetailedReadingScreen(
             readingId: extra?['readingId'] as String?,
             locale: locale,
+            autoSpeak: extra?['autoSpeak'] as bool? ?? true,
           ),
         );
       },
