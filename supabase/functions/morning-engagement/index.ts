@@ -1,6 +1,9 @@
 // 8:00 AM IST curiosity push for active subscribers, retried at 8:15 IST.
+// The Flutter web app on Render is static, so this webhook is the timer.
 // pg_cron fires at 02:30 and 02:45 UTC. See
 // 20261006113000_morning_engagement_cron.sql.
+// Each accepted call is recorded in public.cron_executions. See
+// 20261007120000_cron_executions.sql.
 //
 // Deploy:
 //   supabase functions deploy morning-engagement
@@ -90,6 +93,17 @@ serve(async (req) => {
   const istKey = day.toISOString().slice(0, 10);
   const dayStart = new Date(day.getTime() - (5 * 60 + 30) * 60 * 1000).toISOString();
   console.log("[morning-engagement] started", { ist_date: istKey, dry_run: dryRun });
+  const runId = await startCronLog(admin, istKey, dryRun);
+
+  async function complete(
+    status: "succeeded" | "failed" | "dry_run",
+    httpStatus: number,
+    body: Record<string, unknown>,
+    detail?: string,
+  ) {
+    await finishCronLog(admin, runId, status, httpStatus, body, detail);
+    return json(body, httpStatus);
+  }
 
   try {
     const subscriberIds = await activeSubscriberIds(admin);
@@ -120,7 +134,7 @@ serve(async (req) => {
     });
 
     if (dryRun) {
-      return json({
+      return await complete("dry_run", 200, {
         ok: true,
         dry_run: true,
         ist_date: istKey,
@@ -139,7 +153,7 @@ serve(async (req) => {
         "[morning-engagement] FIREBASE_SERVICE_ACCOUNT is missing or invalid; push not sent",
         { pending_push: pendingPush.length },
       );
-      return json({
+      return await complete("failed", 503, {
         ok: false,
         error: "Push delivery failed",
         detail: "FIREBASE_SERVICE_ACCOUNT is missing or invalid",
@@ -150,7 +164,7 @@ serve(async (req) => {
         push_failed: 0,
         push_pending: pendingPush.length,
         fcm_configured: false,
-      }, 503);
+      }, "FIREBASE_SERVICE_ACCOUNT is missing or invalid");
     }
 
     const delivery = serviceAccount
@@ -175,19 +189,79 @@ serve(async (req) => {
       console.error("[morning-engagement] retryable FCM failures remain", {
         push_pending: delivery.pushRetryable,
       });
-      return json({
+      return await complete("failed", 502, {
         ...result,
         error: "Push delivery failed",
         detail: "One or more FCM sends failed and will be retried",
-      }, 502);
+      }, "One or more FCM sends failed and will be retried");
     }
-    return json(result);
+    return await complete("succeeded", 200, result);
   } catch (error) {
     const detail = error instanceof Error ? error.message : "Morning engagement failed";
     console.error("[morning-engagement] failed", detail);
-    return json({ error: "Morning engagement failed", detail }, 500);
+    return await complete("failed", 500, {
+      error: "Morning engagement failed",
+      detail,
+    }, detail);
   }
 });
+
+async function startCronLog(admin: Admin, istDate: string, dryRun: boolean) {
+  try {
+    const { data, error } = await admin
+      .from("cron_executions")
+      .insert({
+        job_name: "morning-engagement",
+        status: "running",
+        ist_date: istDate,
+        result: { dry_run: dryRun },
+      })
+      .select("id")
+      .single();
+    if (error) {
+      console.error("[morning-engagement] could not open cron log", error.message);
+      return null;
+    }
+    return (data?.id as string | undefined) ?? null;
+  } catch (error) {
+    console.error(
+      "[morning-engagement] could not open cron log",
+      error instanceof Error ? error.message : "insert failed",
+    );
+    return null;
+  }
+}
+
+async function finishCronLog(
+  admin: Admin,
+  runId: string | null,
+  status: "succeeded" | "failed" | "dry_run",
+  httpStatus: number,
+  result: Record<string, unknown>,
+  detail?: string,
+) {
+  if (!runId) return;
+  try {
+    const { error } = await admin
+      .from("cron_executions")
+      .update({
+        status,
+        finished_at: new Date().toISOString(),
+        http_status: httpStatus,
+        detail: detail ? detail.slice(0, 500) : null,
+        result,
+      })
+      .eq("id", runId);
+    if (error) {
+      console.error("[morning-engagement] could not finish cron log", error.message);
+    }
+  } catch (error) {
+    console.error(
+      "[morning-engagement] could not finish cron log",
+      error instanceof Error ? error.message : "update failed",
+    );
+  }
+}
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
