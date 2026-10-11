@@ -53,11 +53,14 @@ class AuthService {
         return 'Sign in failed. Please check your credentials.';
       }
       return null;
-    } on AuthException catch (e) {
+    } on AuthException catch (e, stack) {
+      debugPrint('[HastVeda] signIn AuthException: ${e.message} (${e.statusCode})');
+      debugPrint('$stack');
       return e.message;
-    } catch (e) {
-      debugPrint('signIn error: $e');
-      return 'An unexpected error occurred.';
+    } catch (e, stack) {
+      debugPrint('[HastVeda] signIn failed: $e');
+      debugPrint('$stack');
+      return e.toString();
     }
   }
 

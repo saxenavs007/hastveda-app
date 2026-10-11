@@ -84,24 +84,37 @@ class _LoginScreenState extends State<LoginScreen>
       final userId = response.user?.id;
       if (userId != null) {
         analytics.identify(userId: userId);
-        await FCMService.instance.initialize();
       }
       if (mounted) context.go(widget.redirectTo ?? AppRoutes.homeScreen);
-    } on AuthException catch (e) {
+      if (userId != null) {
+        // Permission prompt is not part of auth. A failure here must not
+        // replace a successful sign-in with "Sign in failed".
+        FCMService.instance.initialize().catchError((Object error, StackTrace stack) {
+          debugPrint('[HastVeda] FCM after sign-in failed: $error');
+          debugPrint('$stack');
+        });
+      }
+    } on AuthException catch (e, stack) {
+      debugPrint('[HastVeda] signIn AuthException: ${e.message} (${e.statusCode})');
+      debugPrint('$stack');
       analytics.track(
         HastVedaEvents.signInFailed,
         properties: {'reason': 'auth_exception'},
       );
-      setState(() => _errorMessage = e.message);
-    } catch (_) {
+      if (mounted) setState(() => _errorMessage = e.message);
+    } catch (e, stack) {
+      debugPrint('[HastVeda] signIn failed: $e');
+      debugPrint('$stack');
       final isOffline = ConnectivityService.instance.isOffline;
       analytics.track(
         HastVedaEvents.signInFailed,
-        properties: {'reason': isOffline ? 'offline' : 'unknown'},
+        properties: {'reason': isOffline ? 'offline' : e.runtimeType.toString()},
       );
-      setState(
-        () => _errorMessage = isOffline ? s.offlineAuthError : s.signInFailed,
-      );
+      if (mounted) {
+        setState(
+          () => _errorMessage = isOffline ? s.offlineAuthError : e.toString(),
+        );
+      }
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
