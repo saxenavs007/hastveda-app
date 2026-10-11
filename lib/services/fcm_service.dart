@@ -80,6 +80,11 @@ class FCMService {
   static const String _prefPermissionGranted =
       'hastveda_fcm_permission_granted';
 
+  static const String _vapidKey =
+      'BG7ed0bGM5FT5pPKFUzDIO67V6ox8nHEHhSo_vvENxchfM4EyuGQLDSFf9-tgiSEeWzIJUZu0Se6FmlyXeRlp50';
+
+  final FirebaseMessaging _firebaseMessaging = FirebaseMessaging.instance;
+
   // ── Firebase configuration status ─────────────────────────────────────────
   // Enabled now to fetch live tokens.
   static const bool _firebaseConfigured = true;
@@ -109,14 +114,13 @@ class FCMService {
     try {
       if (!_refreshListenerReady) {
         _refreshListenerReady = true;
-        FirebaseMessaging.instance.onTokenRefresh.listen((newToken) {
+        _firebaseMessaging.onTokenRefresh.listen((newToken) {
           _currentToken = newToken;
           persistToken(newToken);
         });
       }
-      final granted = await requestPermission();
-      await captureToken();
-      if (granted) _initializedForUser = userId;
+      final token = await requestPermissionAndGetToken();
+      if (token != null) _initializedForUser = userId;
     } catch (e) {
       _initializedForUser = null;
       debugPrint('[FCM] Initialization error: $e');
@@ -132,10 +136,14 @@ class FCMService {
       return false;
     }
 
-    final settings = await FirebaseMessaging.instance.requestPermission(
-      alert: true, badge: true, sound: true,
+    final settings = await _firebaseMessaging.requestPermission(
+      alert: true,
+      badge: true,
+      sound: true,
+      provisional: false,
     );
-    final granted = settings.authorizationStatus == AuthorizationStatus.authorized;
+    final granted = settings.authorizationStatus == AuthorizationStatus.authorized ||
+        settings.authorizationStatus == AuthorizationStatus.provisional;
     await prefs.setBool(_prefPermissionGranted, granted);
     await prefs.setBool(_prefPermissionRequested, true);
     return granted;
@@ -152,6 +160,43 @@ class FCMService {
     return prefs.getBool(_prefPermissionGranted) ?? false;
   }
 
+  /// Browser permission prompt plus an FCM token. Call this from a click.
+  Future<String?> requestPermissionAndGetToken() async {
+    try {
+      final settings = await _firebaseMessaging.requestPermission(
+        alert: true,
+        badge: true,
+        sound: true,
+        provisional: false,
+      );
+      final granted =
+          settings.authorizationStatus == AuthorizationStatus.authorized ||
+              settings.authorizationStatus == AuthorizationStatus.provisional;
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool(_prefPermissionGranted, granted);
+      await prefs.setBool(_prefPermissionRequested, true);
+      if (!granted) {
+        debugPrint('[FCM] Notification permission was not granted.');
+        return null;
+      }
+
+      final token = await _firebaseMessaging.getToken(
+        vapidKey: kIsWeb ? _vapidKey : null,
+      );
+      if (token == null) {
+        debugPrint('[FCM] Token is null despite authorization.');
+        return null;
+      }
+      _currentToken = token;
+      await persistToken(token);
+      debugPrint('[FCM] Token generated and saved.');
+      return token;
+    } catch (e) {
+      debugPrint('[FCM] Error during FCM initialization: $e');
+      return null;
+    }
+  }
+
   // ── Capture FCM token ──────────────────────────────────────────────────────
   Future<String?> captureToken() async {
     if (!_firebaseConfigured) {
@@ -159,8 +204,8 @@ class FCMService {
     }
 
     try {
-      final token = await FirebaseMessaging.instance.getToken(
-        vapidKey: "BG7ed0bGM5FT5pPKFUzDIO67V6ox8nHEHhSo_vvENxchfM4EyuGQLDSFf9-tgiSEeWzIJUZu0Se6FmlyXeRlp50",
+      final token = await _firebaseMessaging.getToken(
+        vapidKey: kIsWeb ? _vapidKey : null,
       );
       if (token != null) {
         _currentToken = token;

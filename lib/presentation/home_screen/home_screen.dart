@@ -113,7 +113,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _enableDailyNotifications() async {
     setState(() => _enablingNotifications = true);
     try {
-      await FCMService.instance.initialize();
+      await FCMService.instance.requestPermissionAndGetToken();
       final granted = await FCMService.instance.isPermissionGranted();
       if (!mounted) return;
       setState(() => _dailyNotificationsEnabled = granted);
