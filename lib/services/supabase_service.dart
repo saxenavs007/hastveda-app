@@ -418,6 +418,19 @@ class SupabaseService {
     await Supabase.initialize(url: url, anonKey: anonKey);
   }
 
+  /// [Supabase.client] is a late field. Reading it before [initialize]
+  /// finishes throws [LateInitializationError].
+  static Future<SupabaseClient> ensureReady() async {
+    if (Supabase.instance.isInitialized) return Supabase.instance.client;
+    await initialize();
+    if (!Supabase.instance.isInitialized) {
+      throw StateError(
+        'Supabase client was not initialized. Check SUPABASE_URL and SUPABASE_ANON_KEY.',
+      );
+    }
+    return Supabase.instance.client;
+  }
+
   SupabaseClient get client => Supabase.instance.client;
   User? get currentUser => client.auth.currentUser;
   String? get currentUserId => client.auth.currentUser?.id;
@@ -433,7 +446,8 @@ class SupabaseService {
     String? fullName,
   }) async {
     try {
-      return await client.auth.signUp(
+      final auth = await SupabaseService.ensureReady();
+      return await auth.auth.signUp(
         email: email,
         password: password,
         data: fullName != null ? {'full_name': fullName} : null,
@@ -452,7 +466,8 @@ class SupabaseService {
     required String password,
   }) async {
     try {
-      return await client.auth.signInWithPassword(
+      final auth = await SupabaseService.ensureReady();
+      return await auth.auth.signInWithPassword(
         email: email,
         password: password,
       );

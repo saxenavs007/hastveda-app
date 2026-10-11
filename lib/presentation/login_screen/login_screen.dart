@@ -11,6 +11,7 @@ import '../../services/locale_provider.dart';
 import '../../services/theme_provider.dart';
 import '../../services/analytics_service.dart';
 import '../../services/entitlement_service.dart';
+import '../../services/supabase_service.dart';
 import '../../services/fcm_service.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/custom_image_widget.dart';
@@ -72,7 +73,8 @@ class _LoginScreenState extends State<LoginScreen>
       _errorMessage = null;
     });
     try {
-      final response = await Supabase.instance.client.auth.signInWithPassword(
+      final supabase = await SupabaseService.ensureReady();
+      final response = await supabase.auth.signInWithPassword(
         email: _emailController.text.trim(),
         password: _passwordController.text,
       );
@@ -136,7 +138,8 @@ class _LoginScreenState extends State<LoginScreen>
       _errorMessage = null;
     });
     try {
-      await Supabase.instance.client.auth.resetPasswordForEmail(
+      final supabase = await SupabaseService.ensureReady();
+      await supabase.auth.resetPasswordForEmail(
         email,
         redirectTo: AppRoutes.passwordResetRedirect,
       );
@@ -185,7 +188,8 @@ class _LoginScreenState extends State<LoginScreen>
       _errorMessage = null;
     });
     try {
-      final response = await Supabase.instance.client.auth.signUp(
+      final supabase = await SupabaseService.ensureReady();
+      final response = await supabase.auth.signUp(
         email: _emailController.text.trim(),
         password: _passwordController.text,
         data: {'full_name': _nameController.text.trim()},
