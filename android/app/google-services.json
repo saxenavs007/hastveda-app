@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "412267977624",
+    "project_id": "hastveda-notifications",
+    "storage_bucket": "hastveda-notifications.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:412267977624:android:57ba9317d15258259869ed",
+        "android_client_info": {
+          "package_name": "com.hastveda.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAQ0xYzEmqvykc_ifztjZmEhg3-CMqjEfA"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

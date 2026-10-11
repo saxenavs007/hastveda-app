@@ -1,6 +1,58 @@
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+
+const String _morningChannelId = 'hastveda_daily_horoscope';
+
+/// Handles an FCM message while the app is backgrounded or killed.
+/// Must stay a top-level function so the background isolate can call it.
+@pragma('vm:entry-point')
+Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
+  WidgetsFlutterBinding.ensureInitialized();
+  final notification = message.notification;
+  final title = (notification?.title ?? message.data['title'] ?? '').toString().trim();
+  final body = (notification?.body ?? message.data['body'] ?? '').toString().trim();
+  // A notification payload is drawn by the OS when the process is dead.
+  // Only data-only messages need a local notification from this isolate.
+  if (notification != null || (title.isEmpty && body.isEmpty)) return;
+
+  final plugin = FlutterLocalNotificationsPlugin();
+  const android = AndroidInitializationSettings('@mipmap/ic_launcher');
+  const ios = DarwinInitializationSettings();
+  await plugin.initialize(
+    const InitializationSettings(android: android, iOS: ios),
+  );
+  final route = (message.data['route'] ?? FCMDeepLinks.notifications).toString();
+  await plugin.show(
+    811,
+    title,
+    body,
+    const NotificationDetails(
+      android: AndroidNotificationDetails(
+        _morningChannelId,
+        'Daily horoscope',
+        channelDescription: 'Morning palm horoscope from your saved scan',
+        importance: Importance.max,
+        priority: Priority.high,
+      ),
+      iOS: DarwinNotificationDetails(
+        presentAlert: true,
+        presentBanner: true,
+        presentSound: true,
+      ),
+    ),
+    payload: route,
+  );
+}
+
+/// Registers [firebaseMessagingBackgroundHandler] before [runApp].
+void registerFcmBackgroundHandler() {
+  if (kIsWeb) return;
+  FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
+}
 
 
 // HastVeda FCM Service
@@ -77,14 +129,15 @@ class FCMService {
     if (!_firebaseConfigured) {
       debugPrint('[FCM] Firebase not yet configured — running in stub mode.');
       debugPrint(
-        '[FCM] To enable: add google-services.json to android/app/ and add firebase_messaging package.',
+        '[FCM] To enable delivery: add google-services.json to android/app/. The background handler is already registered.',
       );
       return;
     }
 
-    // When Firebase is configured, initialize here:
+    // The killed-state handler is registered from main() via
+    // registerFcmBackgroundHandler(). Token capture still waits until
+    // google-services.json is present.
     // await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
-    // FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
     // await _setupForegroundHandler();
     // await _requestPermission();
     // await _captureToken();

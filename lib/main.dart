@@ -36,6 +36,7 @@ Future<void> main() async {
     debugPrint('[HastVeda] Path URL strategy skipped: $e');
   }
   WidgetsFlutterBinding.ensureInitialized();
+  registerFcmBackgroundHandler();
 
   // ── Global Flutter error handler ─────────────────────────────────────────
   FlutterError.onError = (FlutterErrorDetails details) {

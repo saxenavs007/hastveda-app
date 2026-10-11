@@ -8,6 +8,7 @@
 // Deploy:
 //   supabase functions deploy morning-engagement
 //   supabase secrets set CRON_SECRET=... FIREBASE_SERVICE_ACCOUNT='{"type":"service_account",...}'
+// FCM_SERVER_KEY is accepted as an alias for that same service-account JSON.
 // Store the same CRON_SECRET in vault as cron_secret, and the anon or
 // publishable key as anon_key, so the scheduled call can authenticate.
 //
@@ -88,7 +89,21 @@ serve(async (req) => {
 
   const url = new URL(req.url);
   const dryRun = url.searchParams.get("dry_run") === "1";
-  const admin = createClient(supabaseUrl, serviceKey);
+  // The cron request authenticates with the anon key. Do not reuse that
+  // Authorization header for database calls. service_role bypasses RLS.
+  const admin = createClient(supabaseUrl, serviceKey, {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false,
+      detectSessionInUrl: false,
+    },
+    global: {
+      headers: {
+        Authorization: `Bearer ${serviceKey}`,
+      },
+    },
+    accessToken: async () => serviceKey,
+  });
   const day = istDate(new Date());
   const istKey = day.toISOString().slice(0, 10);
   const dayStart = new Date(day.getTime() - (5 * 60 + 30) * 60 * 1000).toISOString();
@@ -156,7 +171,7 @@ serve(async (req) => {
       return await complete("failed", 503, {
         ok: false,
         error: "Push delivery failed",
-        detail: "FIREBASE_SERVICE_ACCOUNT is missing or invalid",
+        detail: "FIREBASE_SERVICE_ACCOUNT or FCM_SERVER_KEY is missing or invalid",
         ist_date: istKey,
         subscribers: allowed.length,
         inbox_written: missing.length,
@@ -164,7 +179,7 @@ serve(async (req) => {
         push_failed: 0,
         push_pending: pendingPush.length,
         fcm_configured: false,
-      }, "FIREBASE_SERVICE_ACCOUNT is missing or invalid");
+      }, "FIREBASE_SERVICE_ACCOUNT or FCM_SERVER_KEY is missing or invalid");
     }
 
     const delivery = serviceAccount
@@ -358,10 +373,12 @@ function asRecord(value: unknown): Record<string, unknown> {
 
 async function activeSubscriberIds(admin: Admin) {
   const ids = new Set<string>();
-  const profiles = await pages<{ id: string }>("user_profiles", (from, to) =>
+  // public.user_profiles is the account table. There is no public.profiles.
+  // palm_profiles stores palm traits only and has no FCM token column.
+  const accounts = await pages<{ id: string }>("user_profiles", (from, to) =>
     admin.from("user_profiles").select("id").eq("tier", "premium").eq("is_active", true).range(from, to)
   );
-  for (const row of profiles) ids.add(row.id);
+  for (const row of accounts) ids.add(row.id);
 
   const subs = await pages<{ user_id: string; expires_at: string | null }>("subscriptions", (from, to) =>
     admin
@@ -392,7 +409,7 @@ async function filterActiveProfiles(admin: Admin, ids: string[]) {
   const active = new Set<string>();
   for (const group of chunks(ids, 100)) {
     const data = await query<{ id: string }>(
-      "active profiles",
+      "user_profiles",
       admin.from("user_profiles").select("id").in("id", group).eq("is_active", true),
     );
     for (const row of data) active.add(row.id);
@@ -554,9 +571,11 @@ async function insertMorningRow(
 
 async function tokensFor(admin: Admin, ids: string[]) {
   const tokens = new Map<string, string>();
+  // fcm_token lives on public.users. public.profiles has no token column and
+  // is what produced "permission denied for table profiles".
   for (const group of chunks(ids, 100)) {
     const data = await query<{ id: string; fcm_token: string | null }>(
-      "fcm tokens",
+      "users.fcm_token",
       admin.from("users").select("id, fcm_token").in("id", group).not("fcm_token", "is", null),
     );
     for (const row of data) {
@@ -569,24 +588,31 @@ async function tokensFor(admin: Admin, ids: string[]) {
 
 async function loveSnippets(admin: Admin, ids: string[]) {
   const snippets = new Map<string, string>();
-  for (const group of chunks(ids, 100)) {
-    const rows = await pages<{
-      user_id: string;
-      love_analysis: unknown;
-      created_at: string;
-    }>("palm love snippets", (from, to) =>
-      admin
-        .from("palm_analysis")
-        .select("user_id, love_analysis, created_at")
-        .in("user_id", group)
-        .order("created_at", { ascending: false })
-        .range(from, to)
-    );
-    for (const row of rows) {
-      if (snippets.has(row.user_id)) continue;
-      const snippet = snippetOf(row.love_analysis);
-      if (snippet) snippets.set(row.user_id, snippet);
+  try {
+    for (const group of chunks(ids, 100)) {
+      const rows = await pages<{
+        user_id: string;
+        love_analysis: unknown;
+        created_at: string;
+      }>("palm_analysis", (from, to) =>
+        admin
+          .from("palm_analysis")
+          .select("user_id, love_analysis, created_at")
+          .in("user_id", group)
+          .order("created_at", { ascending: false })
+          .range(from, to)
+      );
+      for (const row of rows) {
+        if (snippets.has(row.user_id)) continue;
+        const snippet = snippetOf(row.love_analysis);
+        if (snippet) snippets.set(row.user_id, snippet);
+      }
     }
+  } catch (error) {
+    console.error(
+      "[morning-engagement] palm_analysis lookup failed; using the default teaser",
+      error instanceof Error ? error.message : "query failed",
+    );
   }
   return snippets;
 }
@@ -611,47 +637,66 @@ async function deliverPushes(
   let pushFailed = 0;
   let pushRetryable = 0;
   let tokensCleared = 0;
-  const accessToken = await firebaseAccessToken(serviceAccount);
-  for (const userId of userIds) {
-    const token = tokens.get(userId);
-    const notice = notices.get(userId);
-    if (!token || !notice) {
-      if (!notice) {
-        pushRetryable++;
-        console.error("[morning-engagement] push skipped because the inbox row was not saved");
+  let accessToken: string;
+  try {
+    accessToken = await firebaseAccessToken(serviceAccount);
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : "Firebase access token request failed";
+    console.error("[morning-engagement] Firebase access token request failed", detail);
+    throw new Error(detail);
+  }
+  for (const group of chunks(userIds, 20)) {
+    const outcomes = await Promise.all(group.map(async (userId) => {
+      const token = tokens.get(userId);
+      const notice = notices.get(userId);
+      if (!token || !notice) {
+        if (!notice) {
+          console.error("[morning-engagement] push skipped because the inbox row was not saved");
+          return { pushSent: 0, pushFailed: 0, pushRetryable: 1, tokensCleared: 0 };
+        }
+        return { pushSent: 0, pushFailed: 0, pushRetryable: 0, tokensCleared: 0 };
       }
-      continue;
-    }
-    const result = await sendFcm(serviceAccount.project_id, accessToken, token, {
-      title: notice.title,
-      body: notice.body,
-      collapseKey: `morning_${istKey}`,
-      data: {
-        type: "morning_curiosity",
-        route: "/notifications",
-        ist_date: istKey,
-      },
-    });
-    if (result.ok) {
-      pushSent++;
-      notice.pushSent = true;
-      await markPush(admin, notice, { push_sent: true, push_error: null });
-      continue;
-    }
-    pushFailed++;
-    if (result.dropToken) {
-      const { error } = await admin.from("users").update({ fcm_token: null }).eq("id", userId);
-      if (error) {
-        console.error("[morning-engagement] could not clear a rejected FCM token", error.message);
-        pushRetryable++;
-      } else {
-        tokensCleared++;
+      let result: { ok: boolean; dropToken: boolean; status: string };
+      try {
+        result = await sendFcm(serviceAccount.project_id, accessToken, token, {
+          title: notice.title,
+          body: notice.body,
+          collapseKey: `morning_${istKey}`,
+          data: {
+            type: "morning_curiosity",
+            route: "/notifications",
+            ist_date: istKey,
+          },
+        });
+      } catch (error) {
+        const detail = error instanceof Error ? error.message : "FCM send failed";
+        console.error("[morning-engagement] FCM send failed", detail);
+        await markPush(admin, notice, { push_sent: false, push_error: detail.slice(0, 180) });
+        return { pushSent: 0, pushFailed: 1, pushRetryable: 1, tokensCleared: 0 };
+      }
+      if (result.ok) {
+        notice.pushSent = true;
+        await markPush(admin, notice, { push_sent: true, push_error: null });
+        return { pushSent: 1, pushFailed: 0, pushRetryable: 0, tokensCleared: 0 };
+      }
+      if (result.dropToken) {
+        const { error } = await admin.from("users").update({ fcm_token: null }).eq("id", userId);
+        if (error) {
+          console.error("[morning-engagement] could not clear a rejected FCM token", error.message);
+          return { pushSent: 0, pushFailed: 1, pushRetryable: 1, tokensCleared: 0 };
+        }
         await markPush(admin, notice, { push_sent: false, push_error: result.status });
+        return { pushSent: 0, pushFailed: 1, pushRetryable: 0, tokensCleared: 1 };
       }
-      continue;
+      await markPush(admin, notice, { push_sent: false, push_error: result.status });
+      return { pushSent: 0, pushFailed: 1, pushRetryable: 1, tokensCleared: 0 };
+    }));
+    for (const outcome of outcomes) {
+      pushSent += outcome.pushSent;
+      pushFailed += outcome.pushFailed;
+      pushRetryable += outcome.pushRetryable;
+      tokensCleared += outcome.tokensCleared;
     }
-    pushRetryable++;
-    await markPush(admin, notice, { push_sent: false, push_error: result.status });
   }
   return { pushSent, pushFailed, pushRetryable, tokensCleared };
 }
@@ -661,14 +706,22 @@ async function markPush(
   notice: MorningNotice,
   patch: { push_sent: boolean; push_error: string | null },
 ) {
-  const data = { ...notice.data, ...patch };
-  const { error } = await admin.from("notifications").update({ data }).eq("id", notice.id);
-  if (error) {
-    console.error("[morning-engagement] could not record push status", error.message);
+  try {
+    const data = { ...notice.data, ...patch };
+    const { error } = await admin.from("notifications").update({ data }).eq("id", notice.id);
+    if (error) {
+      console.error("[morning-engagement] could not record push status", error.message);
+      return false;
+    }
+    notice.data = data;
+    return true;
+  } catch (error) {
+    console.error(
+      "[morning-engagement] could not record push status",
+      error instanceof Error ? error.message : "update failed",
+    );
     return false;
   }
-  notice.data = data;
-  return true;
 }
 
 async function query<T>(
@@ -698,12 +751,16 @@ async function pages<T>(
 }
 
 function readServiceAccount(): ServiceAccount | null {
-  const raw = (Deno.env.get("FIREBASE_SERVICE_ACCOUNT") ?? "").trim();
+  const raw = (
+    Deno.env.get("FIREBASE_SERVICE_ACCOUNT") ??
+    Deno.env.get("FCM_SERVER_KEY") ??
+    ""
+  ).trim();
   if (!raw) return null;
   try {
     const parsed = JSON.parse(raw) as ServiceAccount;
     if (!parsed.project_id || !parsed.client_email || !parsed.private_key) {
-      console.error("[morning-engagement] FIREBASE_SERVICE_ACCOUNT is missing required fields");
+      console.error("[morning-engagement] Firebase service account is missing required fields");
       return null;
     }
     parsed.private_key = parsed.private_key.replace(/\\n/g, "\n");
@@ -782,46 +839,86 @@ async function sendFcm(
     data: Record<string, string>;
   },
 ) {
-  const response = await fetch(
-    `https://fcm.googleapis.com/v1/projects/${projectId}/messages:send`,
-    {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        message: {
-          token,
-          notification: { title: message.title, body: message.body },
-          data: message.data,
-          android: {
-            priority: "HIGH",
-            collapse_key: message.collapseKey,
+  let response: Response;
+  try {
+    response = await fetch(
+      `https://fcm.googleapis.com/v1/projects/${projectId}/messages:send`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          message: {
+            token,
             notification: {
-              channel_id: "hastveda_daily_horoscope",
-              tag: message.collapseKey,
+              title: message.title,
+              body: message.body,
+            },
+            data: fcmData(message.data, message.title, message.body),
+            android: {
+              priority: "HIGH",
+              collapse_key: message.collapseKey,
+              notification: {
+                title: message.title,
+                body: message.body,
+                channel_id: "hastveda_daily_horoscope",
+                tag: message.collapseKey,
+                sound: "default",
+                visibility: "PUBLIC",
+                notification_priority: "PRIORITY_HIGH",
+                default_sound: true,
+                default_vibrate_timings: true,
+              },
+            },
+            apns: {
+              headers: {
+                "apns-priority": "10",
+                "apns-push-type": "alert",
+              },
+              payload: {
+                aps: {
+                  alert: {
+                    title: message.title,
+                    body: message.body,
+                  },
+                  sound: "default",
+                },
+              },
             },
           },
-          apns: {
-            headers: { "apns-priority": "10" },
-            payload: { aps: { sound: "default" } },
-          },
-        },
-      }),
-    },
-  );
+        }),
+      },
+    );
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : "FCM request failed";
+    console.error("[morning-engagement] FCM request failed", detail);
+    return { ok: false, dropToken: false, status: "NETWORK" };
+  }
   if (response.ok) return { ok: true, dropToken: false, status: "OK" };
   const body = await response.json().catch(() => ({}));
   const status = (body?.error?.status as string | undefined) ?? String(response.status);
   const codes = JSON.stringify(body?.error?.details ?? []);
-  const message = String(body?.error?.message ?? "");
+  const detail = String(body?.error?.message ?? "");
   const dropToken = status === "NOT_FOUND" ||
     codes.includes("UNREGISTERED") ||
-    message.includes("NotRegistered") ||
-    message.includes("registration token is not a valid");
+    detail.includes("NotRegistered") ||
+    detail.includes("registration token is not a valid");
   console.error("[morning-engagement] FCM rejected a token", status);
   return { ok: false, dropToken, status };
+}
+
+function fcmData(
+  data: Record<string, string>,
+  title: string,
+  body: string,
+) {
+  const payload: Record<string, string> = { title, body };
+  for (const [key, value] of Object.entries(data)) {
+    payload[key] = String(value);
+  }
+  return payload;
 }
 
 function pemToDer(pem: string) {
