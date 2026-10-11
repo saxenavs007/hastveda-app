@@ -8,6 +8,7 @@ import '../../routes/app_routes.dart';
 import '../../services/supabase_service.dart';
 import '../../services/app_strings.dart';
 import '../../services/entitlement_notifier.dart';
+import '../../services/fcm_service.dart';
 import '../../services/entitlement_service.dart';
 import '../../services/locale_provider.dart';
 import '../../services/theme_provider.dart';
@@ -31,11 +32,14 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _isLoading = true;
   String? _loadError;
   bool? _isPremium;
+  bool _dailyNotificationsEnabled = false;
+  bool _enablingNotifications = false;
 
   @override
   void initState() {
     super.initState();
     _loadData();
+    _refreshNotificationState();
   }
 
   @override
@@ -99,6 +103,41 @@ class _HomeScreenState extends State<HomeScreen> {
       _recentReadings = List<Map<String, dynamic>>.from(readings);
       _isLoading = false;
     });
+  }
+
+  Future<void> _refreshNotificationState() async {
+    final granted = await FCMService.instance.isPermissionGranted();
+    if (mounted) setState(() => _dailyNotificationsEnabled = granted);
+  }
+
+  Future<void> _enableDailyNotifications() async {
+    setState(() => _enablingNotifications = true);
+    try {
+      await FCMService.instance.initialize();
+      final granted = await FCMService.instance.isPermissionGranted();
+      if (!mounted) return;
+      setState(() => _dailyNotificationsEnabled = granted);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            granted
+                ? 'Daily notifications are on.'
+                : 'Notification permission was not granted.',
+          ),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _enablingNotifications = false);
+    }
+  }
+
+  bool get _signedIn {
+    try {
+      return Supabase.instance.client.auth.currentUser != null;
+    } catch (_) {
+      return false;
+    }
   }
 
   String _greeting(AppStrings s) {
@@ -252,6 +291,45 @@ class _HomeScreenState extends State<HomeScreen> {
                                   ),
                                 ),
                                 const SizedBox(height: 16),
+                                if (_signedIn && !_dailyNotificationsEnabled) ...[
+                                  SizedBox(
+                                    width: double.infinity,
+                                    child: FilledButton.icon(
+                                      onPressed: _enablingNotifications
+                                          ? null
+                                          : _enableDailyNotifications,
+                                      style: FilledButton.styleFrom(
+                                        backgroundColor: AppTheme.gold,
+                                        foregroundColor: const Color(0xFF1A1408),
+                                        disabledBackgroundColor:
+                                            AppTheme.gold.withValues(alpha: 0.5),
+                                        padding: const EdgeInsets.symmetric(
+                                          vertical: 14,
+                                        ),
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.circular(14),
+                                        ),
+                                      ),
+                                      icon: _enablingNotifications
+                                          ? const SizedBox(
+                                              width: 18,
+                                              height: 18,
+                                              child: CircularProgressIndicator(
+                                                strokeWidth: 2,
+                                                color: Color(0xFF1A1408),
+                                              ),
+                                            )
+                                          : const Icon(Icons.notifications_active_outlined),
+                                      label: const Text(
+                                        'Enable Daily Notifications',
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.w700,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 16),
+                                ],
                                 const PremiumStatusWidget(),
                                 const SizedBox(height: 20),
                                 _ScanCtaCard(

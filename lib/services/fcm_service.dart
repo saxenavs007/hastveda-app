@@ -103,8 +103,8 @@ class FCMService {
     } catch (_) {
       return;
     }
-    if (userId == null || _initializedForUser == userId) return;
-    _initializedForUser = userId;
+    if (userId == null) return;
+    if (_initializedForUser == userId && await isPermissionGranted()) return;
 
     try {
       if (!_refreshListenerReady) {
@@ -114,8 +114,9 @@ class FCMService {
           persistToken(newToken);
         });
       }
-      await requestPermission();
+      final granted = await requestPermission();
       await captureToken();
+      if (granted) _initializedForUser = userId;
     } catch (e) {
       _initializedForUser = null;
       debugPrint('[FCM] Initialization error: $e');
