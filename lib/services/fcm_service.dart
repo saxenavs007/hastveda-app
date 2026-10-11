@@ -147,7 +147,9 @@ class FCMService {
     }
 
     try {
-     vapidKey: BG7ed0bGM5FT5pPKFUzDIO67V6ox8nHEHhSo_vvENxchfM4EyuGQLDSFf9-tgiSEeWzIJUZu0Se6FmlyXeRlp50);
+      final token = await FirebaseMessaging.instance.getToken(
+        vapidKey: "BG7ed0bGM5FT5pPKFUzDIO67V6ox8nHEHhSo_vvENxchfM4EyuGQLDSFf9-tgiSEeWzIJUZu0Se6FmlyXeRlp50",
+      );
       if (token != null) {
         _currentToken = token;
         await persistToken(token);
