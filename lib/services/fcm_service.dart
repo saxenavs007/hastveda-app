@@ -85,28 +85,39 @@ class FCMService {
   static const bool _firebaseConfigured = true;
 
   String? _currentToken;
-  bool _initialized = false;
+  bool _refreshListenerReady = false;
+  String? _initializedForUser;
 
   // ── Initialize FCM ─────────────────────────────────────────────────────────
+  /// Asks the browser for notification permission and stores an FCM token.
+  /// A call before sign-in does nothing, so the prompt happens after login.
   Future<void> initialize() async {
-    if (_initialized) return;
-    _initialized = true;
-
     if (!_firebaseConfigured) {
       debugPrint('[FCM] Firebase not yet configured — running in stub mode.');
       return;
     }
 
+    String? userId;
     try {
+      userId = Supabase.instance.client.auth.currentUser?.id;
+    } catch (_) {
+      return;
+    }
+    if (userId == null || _initializedForUser == userId) return;
+    _initializedForUser = userId;
+
+    try {
+      if (!_refreshListenerReady) {
+        _refreshListenerReady = true;
+        FirebaseMessaging.instance.onTokenRefresh.listen((newToken) {
+          _currentToken = newToken;
+          persistToken(newToken);
+        });
+      }
       await requestPermission();
       await captureToken();
-      
-      // Listen for token refreshes
-      FirebaseMessaging.instance.onTokenRefresh.listen((newToken) {
-        _currentToken = newToken;
-        persistToken(newToken);
-      });
     } catch (e) {
+      _initializedForUser = null;
       debugPrint('[FCM] Initialization error: $e');
     }
   }
@@ -201,6 +212,7 @@ class FCMService {
       await prefs.remove(_prefFcmToken);
       await prefs.remove(_prefFcmUser);
       _currentToken = null;
+      _initializedForUser = null;
     } catch (e) {
       debugPrint('[FCM] Token clear error: $e');
     }

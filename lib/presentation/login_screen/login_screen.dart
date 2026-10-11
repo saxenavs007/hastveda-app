@@ -84,10 +84,7 @@ class _LoginScreenState extends State<LoginScreen>
       final userId = response.user?.id;
       if (userId != null) {
         analytics.identify(userId: userId);
-        // Capture FCM token after sign-in
-        FCMService.instance.captureToken().then((token) {
-          if (token != null) FCMService.instance.persistToken(token);
-        });
+        await FCMService.instance.initialize();
       }
       if (mounted) context.go(widget.redirectTo ?? AppRoutes.homeScreen);
     } on AuthException catch (e) {
@@ -182,11 +179,11 @@ class _LoginScreenState extends State<LoginScreen>
       );
       analytics.track(HastVedaEvents.signUpSuccess);
       final userId = response.user?.id;
-      if (userId != null) {
+      if (userId != null && response.session != null) {
         analytics.identify(userId: userId);
-        FCMService.instance.captureToken().then((token) {
-          if (token != null) FCMService.instance.persistToken(token);
-        });
+        await FCMService.instance.initialize();
+      } else if (userId != null) {
+        analytics.identify(userId: userId);
       }
       // With email confirmation enabled, signUp returns a user but no session.
       // Sending them to a screen that requires an account would bounce them
