@@ -4,6 +4,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../config/supabase_config.dart';
 import './error_logger.dart';
 import './fcm_service.dart';
+import 'web_auth_storage_stub.dart'
+    if (dart.library.js_interop) 'web_auth_storage_web.dart';
 
 // ============================================================
 // MODELS
@@ -478,11 +480,21 @@ class SupabaseService {
   Future<void> signOut() async {
     try {
       await FCMService.instance.clearToken();
+    } catch (e) {
+      debugPrint('[HastVeda] FCM token clear skipped: $e');
+    }
+    try {
       await client.auth.signOut();
     } catch (e) {
+      debugPrint('[HastVeda] signOut: $e');
       await errorLogger.logAuthError(operation: 'sign_out', error: e);
-      rethrow;
+      try {
+        await client.auth.signOut(scope: SignOutScope.local);
+      } catch (localError) {
+        debugPrint('[HastVeda] local signOut: $localError');
+      }
     }
+    if (kIsWeb) clearPersistedAuthSession();
   }
 
   Future<void> resetPassword(String email) async {

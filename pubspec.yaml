@@ -54,7 +54,7 @@ flutter:
   assets:
     - assets/
     - assets/images/
-    - env.json
+    - env.json # APK and web read SUPABASE_URL and SUPABASE_ANON_KEY from this asset when dart-define is absent
     - assets/images/hastveda_onboarding_1_cosmic_blueprint.png
     - assets/images/hastveda_onboarding_2_ai_analysis.png
     - assets/images/hastveda_onboarding_3_daily_guidance.png
