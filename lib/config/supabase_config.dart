@@ -15,6 +15,7 @@
 
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
 class SupabaseConfig {
@@ -43,20 +44,35 @@ class SupabaseConfig {
   static String _fileAnonKey = '';
   static String _filePublishableKey = '';
 
-  /// Reads SUPABASE_URL and the client key from env.json when dart-defines
-  /// were not passed. Compile-time values always win.
+  /// Fills any value that `--dart-define` did not supply.
+  /// Render's web build often has no dart-define flags, so env.json is the
+  /// runtime source for the public project URL and anon key.
   static Future<void> loadFromEnvFile() async {
-    if (_compileTimeConfigured) return;
+    if (isConfigured) return;
     try {
       final raw = await rootBundle.loadString('env.json');
       final decoded = jsonDecode(raw);
       if (decoded is! Map) return;
-      _fileUrl = _stringValue(decoded['SUPABASE_URL']);
-      _fileAnonKey = _stringValue(decoded['SUPABASE_ANON_KEY']);
-      _filePublishableKey = _stringValue(decoded['SUPABASE_PUBLISHABLE_KEY']);
-    } catch (_) {
-      // main.dart reports a missing configuration if both sources are empty.
+      _fileUrl = _firstUsable([
+        decoded['SUPABASE_URL'],
+        decoded['SUPABASE_URL_FALLBACK'],
+      ]);
+      _fileAnonKey = _firstUsable([
+        decoded['SUPABASE_ANON_KEY'],
+        decoded['SUPABASE_ANON_KEY_FALLBACK'],
+      ]);
+      _filePublishableKey = _usable(decoded['SUPABASE_PUBLISHABLE_KEY']);
+    } catch (e) {
+      debugPrint('[HastVeda] env.json was not loaded: $e');
     }
+  }
+
+  static String _firstUsable(List<Object?> values) {
+    for (final value in values) {
+      final text = _usable(value);
+      if (text.isNotEmpty) return text;
+    }
+    return '';
   }
 
   static String _stringValue(Object? value) {
@@ -64,9 +80,18 @@ class SupabaseConfig {
     return value.trim();
   }
 
-  static bool get _compileTimeConfigured =>
-      _envUrl.isNotEmpty &&
-      (_legacyAnonKey.isNotEmpty || _publishableKey.isNotEmpty);
+  /// Ignores empty strings and placeholder copies such as COPY_OF_SUPABASE_URL.
+  static String _usable(Object? value) {
+    final text = _stringValue(value);
+    if (text.isEmpty) return '';
+    final upper = text.toUpperCase();
+    if (upper.startsWith('COPY_OF_') ||
+        upper.startsWith('YOUR_') ||
+        upper.startsWith('YOUR-')) {
+      return '';
+    }
+    return text;
+  }
 
   /// Returns the Supabase project URL.
   static String get url => _envUrl.isNotEmpty ? _envUrl : _fileUrl;

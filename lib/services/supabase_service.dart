@@ -399,21 +399,16 @@ class SupabaseService {
   SupabaseService._();
 
   static Future<void> initialize() async {
-    try {
-      Supabase.instance.client;
-      return;
-    } catch (_) {
-      // Not initialized yet.
-    }
+    if (Supabase.instance.isInitialized) return;
+    await SupabaseConfig.loadFromEnvFile();
     final url = SupabaseConfig.url;
     final anonKey = SupabaseConfig.anonKey;
 
     if (url.isEmpty || anonKey.isEmpty) {
-      throw Exception(
-        'SUPABASE_URL and SUPABASE_ANON_KEY are not configured. '
-        'Ensure env.json contains valid values and the APK is built '
-        'with --dart-define flags injected by the Rocket build pipeline.',
+      debugPrint(
+        '[HastVeda] Supabase URL or anon key is still empty after env.json.',
       );
+      return;
     }
     await Supabase.initialize(url: url, anonKey: anonKey);
   }
