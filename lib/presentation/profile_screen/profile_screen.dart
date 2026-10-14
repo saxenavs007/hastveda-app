@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../routes/app_routes.dart';
+import '../../services/auth_service.dart';
 import '../../services/supabase_service.dart';
 import '../../services/app_strings.dart';
 import '../../services/entitlement_notifier.dart';
@@ -103,8 +104,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
       analytics.track(HastVedaEvents.logout);
       analytics.reset();
       NotificationPreferencesService.instance.reset();
-      await SupabaseService.instance.signOut();
-      if (mounted) context.go(AppRoutes.login);
+      await AuthService.instance.signOut();
+      resetToLogin();
     }
   }
 
@@ -145,8 +146,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
       analytics.track('account_deleted');
       analytics.reset();
       NotificationPreferencesService.instance.reset();
-      await SupabaseService.instance.signOut();
-      if (mounted) context.go(AppRoutes.login);
+      await AuthService.instance.signOut();
+      resetToLogin();
     } catch (e) {
       debugPrint('Delete account error: $e');
       if (mounted) {

@@ -1,6 +1,8 @@
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import './entitlement_service.dart';
+import './fcm_service.dart';
 import './supabase_service.dart';
 
 /// Centralized authentication service for HastVeda.
@@ -64,13 +66,44 @@ class AuthService {
     }
   }
 
-  /// Sign out the current user.
+  /// Revokes every server session, then drops the cached token on this device.
   Future<void> signOut() async {
     try {
-      await _supabase.signOut();
+      await FCMService.instance.clearToken();
     } catch (e) {
-      debugPrint('signOut error: $e');
+      debugPrint('[HastVeda] FCM token clear skipped: $e');
     }
+    try {
+      if (SupabaseService.isReady) {
+        await Supabase.instance.client.auth
+            .signOut(scope: SignOutScope.global)
+            .timeout(const Duration(seconds: 8));
+      }
+    } catch (e) {
+      debugPrint('[HastVeda] global signOut: $e');
+      try {
+        if (SupabaseService.isReady) {
+          await Supabase.instance.client.auth.signOut(scope: SignOutScope.local);
+        }
+      } catch (localError) {
+        debugPrint('[HastVeda] local signOut: $localError');
+      }
+    }
+    try {
+      await _supabase.clearLocalAuthState();
+    } catch (e) {
+      debugPrint('[HastVeda] auth storage clear: $e');
+    }
+    if (SupabaseService.isReady &&
+        Supabase.instance.client.auth.currentSession != null) {
+      try {
+        await Supabase.instance.client.auth.signOut(scope: SignOutScope.local);
+        await _supabase.clearLocalAuthState();
+      } catch (e) {
+        debugPrint('[HastVeda] leftover session clear: $e');
+      }
+    }
+    EntitlementService.instance.invalidateCache();
   }
 
   /// Send password reset email.

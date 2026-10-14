@@ -400,27 +400,43 @@ class SupabaseService {
 
   SupabaseService._();
 
-  static Future<void> initialize() async {
-    if (Supabase.instance.isInitialized) return;
-    await SupabaseConfig.loadFromEnvFile();
-    final url = SupabaseConfig.url;
-    final anonKey = SupabaseConfig.anonKey;
+  /// [Supabase.instance] asserts in debug if it is read before
+  /// [Supabase.initialize]. This flag is the safe check.
+  static bool _ready = false;
+  static Future<void>? _initializing;
 
-    if (url.isEmpty || anonKey.isEmpty) {
-      debugPrint(
-        '[HastVeda] Supabase URL or anon key is still empty after env.json.',
-      );
-      return;
+  static bool get isReady => _ready;
+
+  static Future<void> initialize() {
+    if (_ready) return Future<void>.value();
+    return _initializing ??= _openClient();
+  }
+
+  static Future<void> _openClient() async {
+    try {
+      await SupabaseConfig.loadFromEnvFile();
+      final url = SupabaseConfig.url;
+      final anonKey = SupabaseConfig.anonKey;
+
+      if (url.isEmpty || anonKey.isEmpty) {
+        debugPrint(
+          '[HastVeda] Supabase URL or anon key is still empty after env.json.',
+        );
+        return;
+      }
+      await Supabase.initialize(url: url, anonKey: anonKey);
+      _ready = true;
+    } catch (e) {
+      _initializing = null;
+      rethrow;
     }
-    await Supabase.initialize(url: url, anonKey: anonKey);
   }
 
   /// [Supabase.client] is a late field. Reading it before [initialize]
   /// finishes throws [LateInitializationError].
   static Future<SupabaseClient> ensureReady() async {
-    if (Supabase.instance.isInitialized) return Supabase.instance.client;
     await initialize();
-    if (!Supabase.instance.isInitialized) {
+    if (!_ready) {
       throw StateError(
         'Supabase client was not initialized. Check SUPABASE_URL and SUPABASE_ANON_KEY.',
       );
@@ -477,24 +493,35 @@ class SupabaseService {
     }
   }
 
+  Future<void> clearLocalAuthState() => clearPersistedAuthSession();
+
   Future<void> signOut() async {
     try {
       await FCMService.instance.clearToken();
     } catch (e) {
       debugPrint('[HastVeda] FCM token clear skipped: $e');
     }
-    try {
-      await client.auth.signOut();
-    } catch (e) {
-      debugPrint('[HastVeda] signOut: $e');
-      await errorLogger.logAuthError(operation: 'sign_out', error: e);
+    if (_ready) {
+      final auth = Supabase.instance.client.auth;
       try {
-        await client.auth.signOut(scope: SignOutScope.local);
-      } catch (localError) {
-        debugPrint('[HastVeda] local signOut: $localError');
+        await auth
+            .signOut(scope: SignOutScope.global)
+            .timeout(const Duration(seconds: 8));
+      } catch (e) {
+        debugPrint('[HastVeda] global signOut: $e');
+        await errorLogger.logAuthError(operation: 'sign_out', error: e);
+        try {
+          await auth.signOut(scope: SignOutScope.local);
+        } catch (localError) {
+          debugPrint('[HastVeda] local signOut: $localError');
+        }
       }
     }
-    if (kIsWeb) clearPersistedAuthSession();
+    try {
+      await clearLocalAuthState();
+    } catch (e) {
+      debugPrint('[HastVeda] auth storage clear: $e');
+    }
   }
 
   Future<void> resetPassword(String email) async {

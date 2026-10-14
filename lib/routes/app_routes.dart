@@ -188,6 +188,11 @@ void goToHome() {
   }
 }
 
+/// Replaces the shell and every pushed page with Login.
+void resetToLogin() {
+  appRouter.go(AppRoutes.login);
+}
+
 /// Pops one page when the router can actually pop. Otherwise opens Home.
 void popOrHome() {
   try {

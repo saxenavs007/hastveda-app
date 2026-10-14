@@ -70,6 +70,18 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _readHome() async {
+    try {
+      await SupabaseService.ensureReady();
+    } catch (e) {
+      debugPrint('Home opened before Supabase was ready: $e');
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          _loadError = null;
+        });
+      }
+      return;
+    }
     final userId = Supabase.instance.client.auth.currentUser?.id;
     if (userId == null) {
       if (mounted) setState(() => _isLoading = false);

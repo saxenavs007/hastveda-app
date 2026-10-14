@@ -83,7 +83,13 @@ class FCMService {
   static const String _vapidKey =
       'BG7ed0bGM5FT5pPKFUzDIO67V6ox8nHEHhSo_vvENxchfM4EyuGQLDSFf9-tgiSEeWzIJUZu0Se6FmlyXeRlp50';
 
-  final FirebaseMessaging _firebaseMessaging = FirebaseMessaging.instance;
+  FirebaseMessaging? _messaging;
+
+  /// Created on first use. Reading [FirebaseMessaging.instance] at startup
+  /// throws when Firebase has not been configured, which painted the error
+  /// screen over the splash.
+  FirebaseMessaging get _firebaseMessaging =>
+      _messaging ??= FirebaseMessaging.instance;
 
   // ── Firebase configuration status ─────────────────────────────────────────
   // Enabled now to fetch live tokens.

@@ -6,6 +6,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../routes/app_routes.dart';
 import '../../startup.dart';
+import '../../services/supabase_service.dart';
 import '../../services/theme_provider.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/custom_image_widget.dart';
@@ -55,6 +56,8 @@ class _SplashScreenState extends State<SplashScreen>
     }
     if (!mounted) return;
     try {
+      await SupabaseService.ensureReady();
+      if (!mounted) return;
       final session = Supabase.instance.client.auth.currentSession;
       if (!mounted) return;
       if (session != null) {

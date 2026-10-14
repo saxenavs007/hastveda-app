@@ -5,13 +5,13 @@ import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../routes/app_routes.dart';
+import '../../services/auth_service.dart';
 import '../../theme/app_theme.dart';
 import '../../services/app_strings.dart';
 import '../../services/entitlement_notifier.dart';
 import '../../services/locale_provider.dart';
 import '../../services/in_app_review_service.dart';
 import '../../services/theme_provider.dart';
-import '../../services/supabase_service.dart';
 import '../../services/notification_preferences_service.dart';
 import '../../services/analytics_service.dart';
 
@@ -222,8 +222,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       analytics.track(HastVedaEvents.logout);
                       analytics.reset();
                       NotificationPreferencesService.instance.reset();
-                      await SupabaseService.instance.signOut();
-                      if (context.mounted) context.go(AppRoutes.login);
+                      await AuthService.instance.signOut();
+                      resetToLogin();
                     }
                   },
                   isDark: isDark,

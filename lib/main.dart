@@ -66,6 +66,11 @@ Future<void> main() async {
 
   ErrorWidget.builder = (FlutterErrorDetails details) {
     errorLogger.logFlutterError(details);
+    // The first frames are the splash. A late Supabase client or asset
+    // miss must not paint the "Something went wrong" screen over it.
+    if (!_startupSettled) {
+      return const _StartupLoadingFrame();
+    }
     if (!hasShownError) {
       hasShownError = true;
       Future.delayed(const Duration(seconds: 5), () {
@@ -76,8 +81,15 @@ Future<void> main() async {
     return const SizedBox.shrink();
   };
 
-  // Paint before any startup future. The HTML loader keys off the first
-  // frame, so waiting here is what surfaces "Loading timed out".
+  if (!debugForceStartupFailure) {
+    try {
+      await SupabaseService.ensureReady();
+    } catch (e, stack) {
+      debugPrint('[HastVeda] Supabase was not ready before runApp: $e');
+      debugPrint('$stack');
+    }
+  }
+
   GoRouter.optionURLReflectsImperativeAPIs = true;
   runApp(
     ProviderScope(
@@ -140,35 +152,61 @@ Future<void> _logStartupFailure(String label, Object error) async {
 }
 
 Future<void> _boot() async {
-  // These must not sit on the path to the first screen.
-  unawaited(
-    _step(
-      'orientation',
-      SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]),
-      _serviceTimeout,
-    ),
-  );
-  unawaited(_step('fcm', FCMService.instance.initialize(), _serviceTimeout));
-  unawaited(
-    _step(
-      'notifications',
-      LocalNotificationService.instance.initialize(),
-      _serviceTimeout,
-    ),
-  );
-  unawaited(
-    _step(
-      'analytics',
-      analytics.track(HastVedaEvents.appOpened),
-      _serviceTimeout,
-    ),
-  );
   try {
+    // These must not sit on the path to the first screen.
+    unawaited(
+      _step(
+        'orientation',
+        SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]),
+        _serviceTimeout,
+      ),
+    );
+    unawaited(_step('fcm', FCMService.instance.initialize(), _serviceTimeout));
+    unawaited(
+      _step(
+        'notifications',
+        LocalNotificationService.instance.initialize(),
+        _serviceTimeout,
+      ),
+    );
+    unawaited(
+      _step(
+        'analytics',
+        analytics.track(HastVedaEvents.appOpened),
+        _serviceTimeout,
+      ),
+    );
     await _prepareStartup().timeout(_backendTimeout);
   } catch (e) {
     debugPrint('[HastVeda] startup gave up: $e');
   } finally {
+    _startupSettled = true;
     markStartupFinished();
+  }
+}
+
+/// True after the splash has been given a ready client, or startup gave up.
+bool _startupSettled = false;
+
+/// Shown in place of the error screen while the first frame is still booting.
+class _StartupLoadingFrame extends StatelessWidget {
+  const _StartupLoadingFrame();
+
+  @override
+  Widget build(BuildContext context) {
+    return const ColoredBox(
+      color: Color(0xFF070708),
+      child: Center(
+        child: SizedBox(
+          width: 22,
+          height: 22,
+          child: CircularProgressIndicator(
+            strokeWidth: 1.5,
+            valueColor: AlwaysStoppedAnimation<Color>(Color(0xFFD4AF37)),
+          ),
+        ),
+      ),
+    );
   }
 }
 
