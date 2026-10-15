@@ -1,3 +1,4 @@
+import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
@@ -88,8 +89,14 @@ class FCMService {
   /// Created on first use. Reading [FirebaseMessaging.instance] at startup
   /// throws when Firebase has not been configured, which painted the error
   /// screen over the splash.
-  FirebaseMessaging get _firebaseMessaging =>
-      _messaging ??= FirebaseMessaging.instance;
+  bool get _isFirebaseReady => Firebase.apps.isNotEmpty;
+
+  FirebaseMessaging get _firebaseMessaging {
+    if (!_isFirebaseReady) {
+      throw StateError('[FCM] Firebase must be initialized before messaging is accessed.');
+    }
+    return _messaging ??= FirebaseMessaging.instance;
+  }
 
   // ── Firebase configuration status ─────────────────────────────────────────
   // Enabled now to fetch live tokens.
@@ -104,6 +111,10 @@ class FCMService {
   /// Asks the browser for notification permission and stores an FCM token.
   /// A call before sign-in does nothing, so the prompt happens after login.
   Future<void> initialize() async {
+    if (!_firebaseConfigured || !_isFirebaseReady) {
+      debugPrint('[FCM] Firebase is not initialized; skipping token registration for now.');
+      return;
+    }
     if (!_firebaseConfigured) {
       debugPrint('[FCM] Firebase not yet configured — running in stub mode.');
       return;
@@ -151,6 +162,10 @@ class FCMService {
   // ── Request notification permission ───────────────────────────────────────
   Future<bool> requestPermission() async {
     final prefs = await SharedPreferences.getInstance();
+    if (!_isFirebaseReady) {
+      debugPrint('[FCM] Firebase is not initialized; cannot request permission.');
+      return false;
+    }
 
     if (!_firebaseConfigured) {
       await prefs.setBool(_prefPermissionRequested, true);
@@ -183,6 +198,10 @@ class FCMService {
 
   /// Browser permission prompt plus an FCM token. Call this from a click.
   Future<String?> requestPermissionAndGetToken() async {
+    if (!_isFirebaseReady) {
+      debugPrint('[FCM] Firebase is not initialized; cannot generate token.');
+      return null;
+    }
     try {
       final settings = await _firebaseMessaging.requestPermission(
         alert: true,
@@ -220,7 +239,7 @@ class FCMService {
 
   // ── Capture FCM token ──────────────────────────────────────────────────────
   Future<String?> captureToken() async {
-    if (!_firebaseConfigured) {
+    if (!_firebaseConfigured || !_isFirebaseReady) {
       return null;
     }
 
