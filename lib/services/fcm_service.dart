@@ -97,6 +97,7 @@ class FCMService {
 
   String? _currentToken;
   bool _refreshListenerReady = false;
+  bool _authListenerReady = false;
   String? _initializedForUser;
 
   // ── Initialize FCM ─────────────────────────────────────────────────────────
@@ -110,7 +111,21 @@ class FCMService {
 
     String? userId;
     try {
-      userId = Supabase.instance.client.auth.currentUser?.id;
+      final auth = Supabase.instance.client.auth;
+      // Startup can happen before login. Listen for a later sign-in so FCM
+      // registration is retried for fresh installs and newly signed-in users.
+      if (!_authListenerReady) {
+        _authListenerReady = true;
+        auth.onAuthStateChange.listen((state) {
+          if (state.event == AuthChangeEvent.signedIn &&
+              state.session?.user.id != null) {
+            initialize();
+          } else if (state.event == AuthChangeEvent.signedOut) {
+            _initializedForUser = null;
+          }
+        });
+      }
+      userId = auth.currentUser?.id;
     } catch (_) {
       return;
     }
