@@ -81,8 +81,13 @@ class FCMService {
   static const String _prefPermissionGranted =
       'hastveda_fcm_permission_granted';
 
-  static const String _vapidKey =
-      'BG7ed0bGM5FT5pPKFUzDIO67V6ox8nHEHhSo_vvENxchfM4EyuGQLDSFf9-tgiSEeWzIJUZu0Se6FmlyXeRlp50';
+  static const String _appEnvironment = String.fromEnvironment(
+    'APP_ENV',
+    defaultValue: 'production',
+  );
+  static const String _vapidKey = _appEnvironment == 'test'
+      ? String.fromEnvironment('TEST_FIREBASE_VAPID_KEY')
+      : 'BG7ed0bGM5FT5pPKFUzDIO67V6ox8nHEHhSo_vvENxchfM4EyuGQLDSFf9-tgiSEeWzIJUZu0Se6FmlyXeRlp50';
 
   FirebaseMessaging? _messaging;
 
