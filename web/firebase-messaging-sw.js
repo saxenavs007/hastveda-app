@@ -1,13 +1,14 @@
 importScripts('https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js');
 importScripts('https://www.gstatic.com/firebasejs/10.7.0/firebase-messaging-compat.js');
 
+// Values are substituted by build.sh for the selected environment.
 firebase.initializeApp({
-  apiKey: "AIzaSyBHbakAGVgamWXBBL_mFHCicOEhl61Z8FI",
-  authDomain: "hastveda-notifications.firebaseapp.com",
-  projectId: "hastveda-notifications",
-  storageBucket: "hastveda-notifications.appfirebasestorage.app",
-  messagingSenderId: "412267977624",
-  appId: "1:412267977624:web:c85847f932d18ec69869ed"
+  apiKey: "__FIREBASE_API_KEY__",
+  authDomain: "__FIREBASE_AUTH_DOMAIN__",
+  projectId: "__FIREBASE_PROJECT_ID__",
+  storageBucket: "__FIREBASE_STORAGE_BUCKET__",
+  messagingSenderId: "__FIREBASE_MESSAGING_SENDER_ID__",
+  appId: "__FIREBASE_APP_ID__"
 });
 
 const messaging = firebase.messaging();
