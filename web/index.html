@@ -160,6 +160,15 @@
           .register(workerUrl, { scope: scope, updateViaCache: "none" })
           .catch(function () {});
 
+        // Reload exactly once when a newly installed worker takes control.
+        // This avoids service-worker-side navigation and repeated reload loops.
+        var reloadingForWorker = false;
+        navigator.serviceWorker.addEventListener("controllerchange", function () {
+          if (reloadingForWorker) return;
+          reloadingForWorker = true;
+          window.location.reload();
+        });
+
         navigator.serviceWorker.ready.then(function (registration) {
           function checkForUpdate() {
             registration.update().catch(function () {});
