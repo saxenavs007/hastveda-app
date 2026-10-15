@@ -73,26 +73,35 @@ flutter build web --release --base-href / --pwa-strategy=none \
 # old worker install this one and drop the stale cache.
 cp web/sw.js build/web/sw.js
 cp web/firebase-messaging-sw.js build/web/firebase-messaging-sw.js
-if [ "$APP_ENV" = "test" ]; then
-  python3 - <<'PY'
+python3 - <<'PY'
 import json, os
 path = "build/web/firebase-messaging-sw.js"
 content = open(path, encoding="utf-8").read()
-mapping = {
-    "__FIREBASE_API_KEY__": os.environ["TEST_FIREBASE_API_KEY"],
-    "__FIREBASE_APP_ID__": os.environ["TEST_FIREBASE_APP_ID"],
-    "__FIREBASE_MESSAGING_SENDER_ID__": os.environ["TEST_FIREBASE_MESSAGING_SENDER_ID"],
-    "__FIREBASE_PROJECT_ID__": os.environ["TEST_FIREBASE_PROJECT_ID"],
-    "__FIREBASE_AUTH_DOMAIN__": os.environ["TEST_FIREBASE_AUTH_DOMAIN"],
-    "__FIREBASE_STORAGE_BUCKET__": os.environ["TEST_FIREBASE_STORAGE_BUCKET"],
-}
+if os.environ.get("APP_ENV", "production").strip().lower() == "test":
+    mapping = {
+        "__FIREBASE_API_KEY__": os.environ["TEST_FIREBASE_API_KEY"],
+        "__FIREBASE_APP_ID__": os.environ["TEST_FIREBASE_APP_ID"],
+        "__FIREBASE_MESSAGING_SENDER_ID__": os.environ["TEST_FIREBASE_MESSAGING_SENDER_ID"],
+        "__FIREBASE_PROJECT_ID__": os.environ["TEST_FIREBASE_PROJECT_ID"],
+        "__FIREBASE_AUTH_DOMAIN__": os.environ["TEST_FIREBASE_AUTH_DOMAIN"],
+        "__FIREBASE_STORAGE_BUCKET__": os.environ["TEST_FIREBASE_STORAGE_BUCKET"],
+    }
+else:
+    # Preserve the existing production Firebase configuration for production builds.
+    mapping = {
+        "__FIREBASE_API_KEY__": "AIzaSyBHbakAGVgamWXBBL_mFHCicOEhl61Z8FI",
+        "__FIREBASE_APP_ID__": "1:412267977624:web:c85847f932d18ec69869ed",
+        "__FIREBASE_MESSAGING_SENDER_ID__": "412267977624",
+        "__FIREBASE_PROJECT_ID__": "hastveda-notifications",
+        "__FIREBASE_AUTH_DOMAIN__": "hastveda-notifications.firebaseapp.com",
+        "__FIREBASE_STORAGE_BUCKET__": "hastveda-notifications.appfirebasestorage.app",
+    }
 for old, new in mapping.items():
     content = content.replace(old, json.dumps(new)[1:-1])
 if "__FIREBASE_" in content:
-    raise SystemExit("Unresolved Firebase config placeholder; refusing test build.")
+    raise SystemExit("Unresolved Firebase config placeholder; refusing build.")
 open(path, "w", encoding="utf-8").write(content)
 PY
-fi
 BUILD_ID="$(date -u +%Y%m%d%H%M%S)"
 sed -i "s/__HASTVEDA_BUILD_ID__/${BUILD_ID}/g" build/web/sw.js
 cp build/web/sw.js build/web/flutter_service_worker.js
