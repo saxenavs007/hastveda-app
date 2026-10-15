@@ -45,12 +45,12 @@ Future<void> main() async {
       if (kIsWeb) {
         await Firebase.initializeApp(
           options: const FirebaseOptions(
-            apiKey: 'AIzaSyAQ0xYzEmqvykc_ifztjZmEhg3-CMqjEfA',
+            apiKey: 'AIzaSyBHbakAGVgamWXBBL_mFHCicOEhl61Z8FI',
             appId: '1:412267977624:web:c85847f932d18ec69869ed',
             messagingSenderId: '412267977624',
             projectId: 'hastveda-notifications',
             authDomain: 'hastveda-notifications.firebaseapp.com',
-            storageBucket: 'hastveda-notifications.firebasestorage.app',
+            storageBucket: 'hastveda-notifications.appfirebasestorage.app',
           ),
         );
       } else {
