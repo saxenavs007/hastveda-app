@@ -1,6 +1,17 @@
 #!/usr/bin/env bash
 set -e
 
+APP_ENV="${APP_ENV:-production}"
+if [ "$APP_ENV" = "test" ]; then
+  required_vars="SUPABASE_URL SUPABASE_PUBLISHABLE_KEY TEST_FIREBASE_API_KEY TEST_FIREBASE_APP_ID TEST_FIREBASE_MESSAGING_SENDER_ID TEST_FIREBASE_PROJECT_ID TEST_FIREBASE_AUTH_DOMAIN TEST_FIREBASE_STORAGE_BUCKET TEST_FIREBASE_VAPID_KEY"
+  for name in $required_vars; do
+    if [ -z "${!name:-}" ]; then
+      echo "ERROR: APP_ENV=test requires $name. Refusing to build with production fallbacks."
+      exit 1
+    fi
+  done
+fi
+
 if [ ! -d "_flutter" ]; then
   git clone https://github.com/flutter/flutter.git -b stable --depth 1 _flutter
 fi
