@@ -43,16 +43,39 @@ Future<void> main() async {
   try {
     if (Firebase.apps.isEmpty) {
       if (kIsWeb) {
-        await Firebase.initializeApp(
-          options: const FirebaseOptions(
-            apiKey: 'AIzaSyBHbakAGVgamWXBBL_mFHCicOEhl61Z8FI',
-            appId: '1:412267977624:web:c85847f932d18ec69869ed',
-            messagingSenderId: '412267977624',
-            projectId: 'hastveda-notifications',
-            authDomain: 'hastveda-notifications.firebaseapp.com',
-            storageBucket: 'hastveda-notifications.appfirebasestorage.app',
-          ),
-        );
+        const appEnvironment = String.fromEnvironment('APP_ENV', defaultValue: 'production');
+        if (appEnvironment == 'test') {
+          const apiKey = String.fromEnvironment('TEST_FIREBASE_API_KEY');
+          const appId = String.fromEnvironment('TEST_FIREBASE_APP_ID');
+          const senderId = String.fromEnvironment('TEST_FIREBASE_MESSAGING_SENDER_ID');
+          const projectId = String.fromEnvironment('TEST_FIREBASE_PROJECT_ID');
+          const authDomain = String.fromEnvironment('TEST_FIREBASE_AUTH_DOMAIN');
+          const storageBucket = String.fromEnvironment('TEST_FIREBASE_STORAGE_BUCKET');
+          if ([apiKey, appId, senderId, projectId, authDomain, storageBucket].any((v) => v.isEmpty)) {
+            throw StateError('Test build requires a complete test Firebase configuration; production Firebase is intentionally disabled.');
+          }
+          await Firebase.initializeApp(
+            options: FirebaseOptions(
+              apiKey: apiKey,
+              appId: appId,
+              messagingSenderId: senderId,
+              projectId: projectId,
+              authDomain: authDomain,
+              storageBucket: storageBucket,
+            ),
+          );
+        } else {
+          await Firebase.initializeApp(
+            options: const FirebaseOptions(
+              apiKey: 'AIzaSyBHbakAGVgamWXBBL_mFHCicOEhl61Z8FI',
+              appId: '1:412267977624:web:c85847f932d18ec69869ed',
+              messagingSenderId: '412267977624',
+              projectId: 'hastveda-notifications',
+              authDomain: 'hastveda-notifications.firebaseapp.com',
+              storageBucket: 'hastveda-notifications.appfirebasestorage.app',
+            ),
+          );
+        }
       } else {
         await Firebase.initializeApp();
       }
