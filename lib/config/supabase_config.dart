@@ -47,8 +47,19 @@ class SupabaseConfig {
   /// Fills any value that `--dart-define` did not supply.
   /// Render's web build often has no dart-define flags, so env.json is the
   /// runtime source for the public project URL and anon key.
+  static const String _appEnvironment = String.fromEnvironment(
+    'APP_ENV',
+    defaultValue: 'production',
+  );
+
   static Future<void> loadFromEnvFile() async {
     if (isConfigured) return;
+    // Test builds must never load the repository env.json, which contains
+    // production project values. Test credentials must be injected explicitly.
+    if (_appEnvironment == 'test') {
+      debugPrint('[HastVeda] Test environment: env.json fallback disabled.');
+      return;
+    }
     try {
       final raw = await rootBundle.loadString('env.json');
       final decoded = jsonDecode(raw);
