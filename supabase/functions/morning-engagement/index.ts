@@ -1,4 +1,4 @@
-// 8:00 AM IST curiosity push for active subscribers, retried at 8:15 IST.
+// 8:00 AM IST daily curiosity push for all active users who have not opted out, retried at 8:15 IST.
 // The Flutter web app on Render is static, so this webhook is the timer.
 // pg_cron fires at 02:30 and 02:45 UTC. See
 // 20261006113000_morning_engagement_cron.sql.
@@ -372,37 +372,13 @@ function asRecord(value: unknown): Record<string, unknown> {
 }
 
 async function activeSubscriberIds(admin: Admin) {
-  const ids = new Set<string>();
-  // public.user_profiles is the account table. There is no public.profiles.
+  // Daily notifications are for all active registered accounts, not just Premium.
+  // Notification opt-outs are still respected by filterOptIn() before delivery.
   // palm_profiles stores palm traits only and has no FCM token column.
   const accounts = await pages<{ id: string }>("user_profiles", (from, to) =>
-    admin.from("user_profiles").select("id").eq("tier", "premium").eq("is_active", true).range(from, to)
+    admin.from("user_profiles").select("id").eq("is_active", true).range(from, to)
   );
-  for (const row of accounts) ids.add(row.id);
-
-  const subs = await pages<{ user_id: string; expires_at: string | null }>("subscriptions", (from, to) =>
-    admin
-      .from("subscriptions")
-      .select("user_id, expires_at")
-      .in("status", ["active", "grace_period"])
-      .range(from, to)
-  );
-  for (const row of subs) {
-    if (stillActive(row.expires_at)) ids.add(row.user_id);
-  }
-
-  const ents = await pages<{ user_id: string; expires_at: string | null }>("entitlements", (from, to) =>
-    admin
-      .from("entitlements")
-      .select("user_id, expires_at")
-      .eq("entitlement_type", "PREMIUM")
-      .eq("is_active", true)
-      .range(from, to)
-  );
-  for (const row of ents) {
-    if (stillActive(row.expires_at)) ids.add(row.user_id);
-  }
-  return [...ids];
+  return [...new Set(accounts.map((row) => row.id))];
 }
 
 async function filterActiveProfiles(admin: Admin, ids: string[]) {
