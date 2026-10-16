@@ -1,0 +1,55 @@
+name: Validate Flutter web build
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  web-build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.38.4"
+          channel: stable
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      # Exercise the same build script Render uses. Dummy test configuration
+      # is sufficient for compile-time validation; no live backend is contacted.
+      - name: Build isolated test web app
+        env:
+          APP_ENV: test
+          SUPABASE_URL: https://test-project.invalid
+          SUPABASE_PUBLISHABLE_KEY: sb_publishable_ci_placeholder
+          TEST_FIREBASE_API_KEY: ci-firebase-api-key
+          TEST_FIREBASE_APP_ID: 1:000000000000:web:ci-placeholder
+          TEST_FIREBASE_MESSAGING_SENDER_ID: "000000000000"
+          TEST_FIREBASE_PROJECT_ID: hastveda-ci-test
+          TEST_FIREBASE_AUTH_DOMAIN: hastveda-ci-test.firebaseapp.com
+          TEST_FIREBASE_STORAGE_BUCKET: hastveda-ci-test.appspot.com
+          TEST_FIREBASE_VAPID_KEY: ci-vapid-placeholder
+        run: |
+          bash build.sh
+          python3 - <<'PY'
+          import json, pathlib, sys
+          worker = pathlib.Path("build/web/firebase-messaging-sw.js").read_text(encoding="utf-8")
+          if "__FIREBASE_" in worker:
+              sys.exit("Unresolved Firebase placeholder in built messaging worker.")
+          bundled = pathlib.Path("build/web/assets/env.json")
+          if bundled.exists():
+              data = json.loads(bundled.read_text(encoding="utf-8"))
+              if any("SECRET" in key.upper() or "SERVICE_ACCOUNT" in key.upper() or "PRIVATE_KEY" in key.upper() for key in data):
+                  sys.exit("Privileged-looking configuration found in bundled env.json.")
+          print("Test build script and service-worker substitution validated.")
+          PY
