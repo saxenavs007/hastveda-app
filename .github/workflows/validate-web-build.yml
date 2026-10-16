@@ -25,38 +25,31 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
-      - name: Write compile-time defines
+      # Exercise the same build script Render uses. Dummy test configuration
+      # is sufficient for compile-time validation; no live backend is contacted.
+      - name: Build isolated test web app
         env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
-          SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY }}
-          CASHFREE_ENV: ${{ secrets.CASHFREE_ENV }}
-          MIXPANEL_TOKEN: ${{ secrets.MIXPANEL_TOKEN }}
-          AWS_LAMBDA_CHAT_COMPLETION_URL: ${{ secrets.AWS_LAMBDA_CHAT_COMPLETION_URL }}
-          AWS_LAMBDA_IMAGE_GENERATION_URL: ${{ secrets.AWS_LAMBDA_IMAGE_GENERATION_URL }}
+          APP_ENV: test
+          SUPABASE_URL: https://test-project.invalid
+          SUPABASE_PUBLISHABLE_KEY: sb_publishable_ci_placeholder
+          TEST_FIREBASE_API_KEY: ci-firebase-api-key
+          TEST_FIREBASE_APP_ID: 1:000000000000:web:ci-placeholder
+          TEST_FIREBASE_MESSAGING_SENDER_ID: "000000000000"
+          TEST_FIREBASE_PROJECT_ID: hastveda-ci-test
+          TEST_FIREBASE_AUTH_DOMAIN: hastveda-ci-test.firebaseapp.com
+          TEST_FIREBASE_STORAGE_BUCKET: hastveda-ci-test.appspot.com
+          TEST_FIREBASE_VAPID_KEY: ci-vapid-placeholder
         run: |
-          python - <<'PY'
-          import json, os
-          keys = [
-              "SUPABASE_URL",
-              "SUPABASE_ANON_KEY",
-              "SUPABASE_PUBLISHABLE_KEY",
-              "CASHFREE_ENV",
-              "MIXPANEL_TOKEN",
-              "AWS_LAMBDA_CHAT_COMPLETION_URL",
-              "AWS_LAMBDA_IMAGE_GENERATION_URL",
-          ]
-          data = {key: os.environ[key] for key in keys if os.environ.get(key)}
-          with open("ci-defines.json", "w", encoding="utf-8") as handle:
-              json.dump(data, handle)
-          print("Injected defines:", ", ".join(data) or "(none; asset fallback)")
+          bash build.sh
+          python3 - <<'PY'
+          import json, pathlib, sys
+          worker = pathlib.Path("build/web/firebase-messaging-sw.js").read_text(encoding="utf-8")
+          if "__FIREBASE_" in worker:
+              sys.exit("Unresolved Firebase placeholder in built messaging worker.")
+          bundled = pathlib.Path("build/web/assets/env.json")
+          if bundled.exists():
+              data = json.loads(bundled.read_text(encoding="utf-8"))
+              if any("SECRET" in key.upper() or "SERVICE_ACCOUNT" in key.upper() or "PRIVATE_KEY" in key.upper() for key in data):
+                  sys.exit("Privileged-looking configuration found in bundled env.json.")
+          print("Test build script and service-worker substitution validated.")
           PY
-
-      - name: Build release web app
-        run: |
-          flutter build web --release --base-href "/" --pwa-strategy=none --dart-define-from-file=ci-defines.json
-          cp web/sw.js build/web/sw.js
-          BUILD_ID="$(date -u +%Y%m%d%H%M%S)"
-          sed -i "s/__HASTVEDA_BUILD_ID__/${BUILD_ID}/g" build/web/sw.js
-          cp build/web/sw.js build/web/flutter_service_worker.js
-          touch build/web/.nojekyll
