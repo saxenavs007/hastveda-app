@@ -70,7 +70,7 @@ jobs:
 
           defines = {"APP_ENV": "production", **config}
           Path("client-defines.json").write_text(json.dumps(defines), encoding="utf-8")
-          source_path.write_text(json.dumps(config, indent=2) + "\\n", encoding="utf-8")
+          source_path.write_text(json.dumps(config, indent=2), encoding="utf-8")
           print("Prepared allowlisted client configuration; privileged keys excluded.")
           PY
 
