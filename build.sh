@@ -37,7 +37,11 @@ import json, os
 with open("env.json", encoding="utf-8") as f:
     src = json.load(f)
 app_env = os.environ.get("APP_ENV", "production").strip().lower()
-public_keys = ("SUPABASE_URL", "SUPABASE_ANON_KEY", "SUPABASE_PUBLISHABLE_KEY", "CASHFREE_ENV")
+public_keys = (
+    "SUPABASE_URL", "SUPABASE_ANON_KEY", "SUPABASE_PUBLISHABLE_KEY",
+    "CASHFREE_ENV", "AWS_LAMBDA_CHAT_COMPLETION_URL",
+    "AWS_LAMBDA_IMAGE_GENERATION_URL", "MIXPANEL_TOKEN",
+)
 test_keys = (
     "TEST_FIREBASE_API_KEY", "TEST_FIREBASE_APP_ID",
     "TEST_FIREBASE_MESSAGING_SENDER_ID", "TEST_FIREBASE_PROJECT_ID",
