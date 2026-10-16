@@ -2,7 +2,7 @@ importScripts('https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js'
 importScripts('https://www.gstatic.com/firebasejs/10.7.0/firebase-messaging-compat.js');
 
 firebase.initializeApp({
-  apiKey: "AIzaSyBHbakAGVgamWXBBL_mFHCicOEhl61Z8FI",
+  apiKey: "AIzaSyBHBakAGVgamWXBBl_mFHCicOEHl61Z8fI",
   authDomain: "hastveda-notifications.firebaseapp.com",
   projectId: "hastveda-notifications",
   storageBucket: "hastveda-notifications.appfirebasestorage.app",
