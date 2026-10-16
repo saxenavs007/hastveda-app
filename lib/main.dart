@@ -45,7 +45,7 @@ Future<void> main() async {
       if (kIsWeb) {
         await Firebase.initializeApp(
           options: const FirebaseOptions(
-            apiKey: 'AIzaSyBHbakAGVgamWXBBL_mFHCicOEhl61Z8FI',
+            apiKey: 'AIzaSyBHBakAGVgamWXBBl_mFHCicOEHl61Z8fI',
             appId: '1:412267977624:web:c85847f932d18ec69869ed',
             messagingSenderId: '412267977624',
             projectId: 'hastveda-notifications',
