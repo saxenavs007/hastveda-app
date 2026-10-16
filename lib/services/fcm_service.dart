@@ -265,14 +265,16 @@ class FCMService {
       if (userId == null) return;
 
       final prefs = await SharedPreferences.getInstance();
-      final cachedToken = prefs.getString(_prefFcmToken);
-      final cachedUser = prefs.getString(_prefFcmUser);
-      if (cachedToken == token && cachedUser == userId) return;
 
+      // Do not skip the database write just because this browser has a cached
+      // token. The users.fcm_token column may have been cleared server-side,
+      // or a previous upsert may have failed before local cache was updated.
+      // Treat Supabase as the source of truth and update local cache only after
+      // the authenticated upsert succeeds.
       await Supabase.instance.client.from('users').upsert({
         'id': userId,
         'fcm_token': token,
-        'platform': defaultTargetPlatform.name,
+        'platform': kIsWeb ? 'web' : defaultTargetPlatform.name,
         'last_active_at': DateTime.now().toIso8601String(),
       });
 
