@@ -28,8 +28,54 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
+      - name: Prepare client-safe configuration
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          source_path = Path("env.json")
+          source = json.loads(source_path.read_text(encoding="utf-8"))
+          allowed = (
+              "SUPABASE_URL",
+              "SUPABASE_ANON_KEY",
+              "SUPABASE_PUBLISHABLE_KEY",
+              "CASHFREE_ENV",
+              "AWS_LAMBDA_CHAT_COMPLETION_URL",
+              "AWS_LAMBDA_IMAGE_GENERATION_URL",
+              "MIXPANEL_TOKEN",
+          )
+
+          def usable(value):
+              if not isinstance(value, str):
+                  return ""
+              value = value.strip()
+              upper = value.upper()
+              if not value or upper.startswith(("COPY_OF_", "YOUR_", "YOUR-")):
+                  return ""
+              return value
+
+          config = {}
+          for key in allowed:
+              value = usable(source.get(key))
+              if not value and key in ("SUPABASE_URL", "SUPABASE_ANON_KEY"):
+                  value = usable(source.get(key + "_FALLBACK"))
+              if value:
+                  config[key] = value
+
+          if not config.get("SUPABASE_URL") or not (
+              config.get("SUPABASE_ANON_KEY") or config.get("SUPABASE_PUBLISHABLE_KEY")
+          ):
+              raise SystemExit("Required public Supabase client configuration is missing.")
+
+          defines = {"APP_ENV": "production", **config}
+          Path("client-defines.json").write_text(json.dumps(defines), encoding="utf-8")
+          source_path.write_text(json.dumps(config, indent=2) + "\\n", encoding="utf-8")
+          print("Prepared allowlisted client configuration; privileged keys excluded.")
+          PY
+
       - name: Build release APK
-        run: flutter build apk --release
+        run: flutter build apk --release --dart-define-from-file=client-defines.json
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
