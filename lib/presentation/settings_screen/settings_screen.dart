@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/foundation.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -537,7 +538,9 @@ class _NotificationSection extends StatelessWidget {
               icon: Icons.notifications_outlined,
               label: s.pushNotifications,
               subtitle: s.notificationSettingsDesc,
-              value: prefs.pushEnabled,
+              // Do not display a stale saved preference as enabled when Firebase
+              // failed to initialize (especially in isolated test builds).
+              value: prefs.pushEnabled && Firebase.apps.isNotEmpty,
               onChanged: (v) async {
                 if (v) {
                   // The settings toggle must explicitly request browser/OS
@@ -567,7 +570,7 @@ class _NotificationSection extends StatelessWidget {
               textPri: textPri,
               primaryColor: primaryColor,
             ),
-            if (prefs.pushEnabled) ...[
+            if (prefs.pushEnabled && Firebase.apps.isNotEmpty) ...[
               Divider(height: 1, color: dividerColor, indent: 50),
               _SettingsToggle(
                 icon: Icons.wb_sunny_outlined,
