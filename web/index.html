@@ -142,6 +142,24 @@
       })();
     </script>
 
+    <script>
+      // Register Firebase Messaging's worker explicitly before Flutter starts.
+      // Keep it separate from the app-shell worker (sw.js).
+      (function () {
+        if (!("serviceWorker" in navigator)) return;
+        window.hastvedaFcmServiceWorkerRegistration = navigator.serviceWorker
+          .register("/firebase-messaging-sw.js", { scope: "/firebase-cloud-messaging-push-scope", updateViaCache: "none" })
+          .then(function (registration) {
+            console.info("[FCM] Messaging service worker registered:", registration.scope);
+            return registration;
+          })
+          .catch(function (error) {
+            console.error("[FCM] Messaging service worker registration failed:", error);
+            throw error;
+          });
+      })();
+    </script>
+
     <script src="flutter_bootstrap.js" async></script>
 
     <script>
