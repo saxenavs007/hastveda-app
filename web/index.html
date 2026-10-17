@@ -143,24 +143,51 @@
     </script>
 
     <script>
-      // Register Firebase Messaging's worker explicitly before Flutter starts.
-      // Keep it separate from the app-shell worker (sw.js).
+      // Ensure Firebase's dedicated messaging worker is ready before Flutter
+      // initializes FirebaseMessaging.getToken(). Keep it separate from sw.js.
       (function () {
-        if (!("serviceWorker" in navigator)) return;
-        window.hastvedaFcmServiceWorkerRegistration = navigator.serviceWorker
-          .register("/firebase-messaging-sw.js", { scope: "/firebase-cloud-messaging-push-scope", updateViaCache: "none" })
-          .then(function (registration) {
+        function startFlutter() {
+          if (document.querySelector('script[data-hastveda-flutter-bootstrap]')) return;
+          var script = document.createElement("script");
+          script.src = "/flutter_bootstrap.js";
+          script.async = true;
+          script.setAttribute("data-hastveda-flutter-bootstrap", "true");
+          document.body.appendChild(script);
+        }
+
+        if (!("serviceWorker" in navigator)) {
+          console.error("[FCM] Service workers are unavailable in this browser.");
+          startFlutter();
+          return;
+        }
+
+        var registrationPromise = navigator.serviceWorker.register(
+          "/firebase-messaging-sw.js",
+          { scope: "/firebase-cloud-messaging-push-scope", updateViaCache: "none" }
+        ).then(function (registration) {
+          return navigator.serviceWorker.ready.then(function () {
             console.info("[FCM] Messaging service worker registered:", registration.scope);
             return registration;
-          })
-          .catch(function (error) {
-            console.error("[FCM] Messaging service worker registration failed:", error);
-            throw error;
           });
+        });
+
+        window.hastvedaFcmServiceWorkerRegistration = Promise.race([
+          registrationPromise,
+          new Promise(function (resolve) {
+            setTimeout(function () {
+              console.error("[FCM] Messaging worker registration timed out; starting app.");
+              resolve(null);
+            }, 8000);
+          })
+        ]).catch(function (error) {
+          console.error("[FCM] Messaging service worker registration failed:", error);
+          return null;
+        }).then(function (registration) {
+          startFlutter();
+          return registration;
+        });
       })();
     </script>
-
-    <script src="flutter_bootstrap.js" async></script>
 
     <script>
       // Auto-update. skipWaiting and clients.claim live in sw.js. This page
