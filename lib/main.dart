@@ -50,7 +50,7 @@ Future<void> main() async {
             messagingSenderId: '412267977624',
             projectId: 'hastveda-notifications',
             authDomain: 'hastveda-notifications.firebaseapp.com',
-            storageBucket: 'hastveda-notifications.appfirebasestorage.app',
+            storageBucket: 'hastveda-notifications.app.firebasestorage.app',
           ),
         );
       } else {
