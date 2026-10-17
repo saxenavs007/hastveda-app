@@ -148,7 +148,7 @@
       (function () {
         if (!("serviceWorker" in navigator)) return;
         window.hastvedaFcmServiceWorkerRegistration = navigator.serviceWorker
-          .register("/firebase-messaging-sw.js", { scope: "/", updateViaCache: "none" })
+          .register("/firebase-messaging-sw.js", { scope: "/firebase-cloud-messaging-push-scope", updateViaCache: "none" })
           .then(function (registration) {
             console.info("[FCM] Messaging service worker registered:", registration.scope);
             return registration;
