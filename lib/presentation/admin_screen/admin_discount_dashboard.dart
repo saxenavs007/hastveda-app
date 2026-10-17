@@ -645,8 +645,9 @@ class _GenerateCodeSheetState extends State<_GenerateCodeSheet> {
         'discount_type': _discountType,
         'discount_value': value,
         'applicable_product': 'hastveda_premium',
-        'max_redemptions': int.tryParse(_maxRedemptionsController.text) ?? 1,
-        'max_per_customer': int.tryParse(_maxPerCustomerController.text) ?? 1,
+        // Every discount code is strictly single-use.
+        'max_redemptions': 1,
+        'max_per_customer': 1,
         'campaign': _campaignController.text.trim().isNotEmpty
             ? _campaignController.text.trim()
             : null,
@@ -808,26 +809,29 @@ class _GenerateCodeSheetState extends State<_GenerateCodeSheet> {
             ),
             const SizedBox(height: 12),
 
-            Row(
-              children: [
-                Expanded(
-                  child: _FormField(
-                    label: 'Max Total Uses',
-                    controller: _maxRedemptionsController,
-                    keyboardType: TextInputType.number,
-                    hint: '1',
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: AppTheme.primary.withAlpha(18),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: AppTheme.primary.withAlpha(70)),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.lock_outline, color: AppTheme.primary, size: 18),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'One-time use only — each code can be redeemed once in total.',
+                      style: GoogleFonts.outfit(
+                        color: Colors.white70,
+                        fontSize: 12,
+                      ),
+                    ),
                   ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: _FormField(
-                    label: 'Max Per Customer',
-                    controller: _maxPerCustomerController,
-                    keyboardType: TextInputType.number,
-                    hint: '1',
-                  ),
-                ),
-              ],
+                ],
+              ),
             ),
             const SizedBox(height: 12),
 
