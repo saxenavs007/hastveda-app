@@ -303,7 +303,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                   ),
                                 ),
                                 const SizedBox(height: 16),
-                                if (_signedIn && !_dailyNotificationsEnabled) ...[
+                                if (_signedIn) ...[
                                   SizedBox(
                                     width: double.infinity,
                                     child: FilledButton.icon(
@@ -332,8 +332,10 @@ class _HomeScreenState extends State<HomeScreen> {
                                               ),
                                             )
                                           : const Icon(Icons.notifications_active_outlined),
-                                      label: const Text(
-                                        'Enable Daily Notifications',
+                                      label: Text(
+                                        _dailyNotificationsEnabled
+                                            ? 'Retry Daily Notifications'
+                                            : 'Enable Daily Notifications',
                                         style: TextStyle(
                                           fontWeight: FontWeight.w700,
                                         ),

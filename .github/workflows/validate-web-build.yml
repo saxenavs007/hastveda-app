@@ -1,0 +1,62 @@
+name: Validate Flutter web build
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  web-build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.38.4"
+          channel: stable
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Write compile-time defines
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY }}
+          CASHFREE_ENV: ${{ secrets.CASHFREE_ENV }}
+          MIXPANEL_TOKEN: ${{ secrets.MIXPANEL_TOKEN }}
+          AWS_LAMBDA_CHAT_COMPLETION_URL: ${{ secrets.AWS_LAMBDA_CHAT_COMPLETION_URL }}
+          AWS_LAMBDA_IMAGE_GENERATION_URL: ${{ secrets.AWS_LAMBDA_IMAGE_GENERATION_URL }}
+        run: |
+          python - <<'PY'
+          import json, os
+          keys = [
+              "SUPABASE_URL",
+              "SUPABASE_ANON_KEY",
+              "SUPABASE_PUBLISHABLE_KEY",
+              "CASHFREE_ENV",
+              "MIXPANEL_TOKEN",
+              "AWS_LAMBDA_CHAT_COMPLETION_URL",
+              "AWS_LAMBDA_IMAGE_GENERATION_URL",
+          ]
+          data = {key: os.environ[key] for key in keys if os.environ.get(key)}
+          with open("ci-defines.json", "w", encoding="utf-8") as handle:
+              json.dump(data, handle)
+          print("Injected defines:", ", ".join(data) or "(none; asset fallback)")
+          PY
+
+      - name: Build release web app
+        run: |
+          flutter build web --release --base-href "/" --pwa-strategy=none --dart-define-from-file=ci-defines.json
+          cp web/sw.js build/web/sw.js
+          BUILD_ID="$(date -u +%Y%m%d%H%M%S)"
+          sed -i "s/__HASTVEDA_BUILD_ID__/${BUILD_ID}/g" build/web/sw.js
+          cp build/web/sw.js build/web/flutter_service_worker.js
+          touch build/web/.nojekyll

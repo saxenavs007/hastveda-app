@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
@@ -13,6 +14,7 @@ import '../../services/locale_provider.dart';
 import '../../services/in_app_review_service.dart';
 import '../../services/theme_provider.dart';
 import '../../services/notification_preferences_service.dart';
+import '../../services/fcm_service.dart';
 import '../../services/analytics_service.dart';
 
 class SettingsScreen extends StatefulWidget {
@@ -537,6 +539,22 @@ class _NotificationSection extends StatelessWidget {
               subtitle: s.notificationSettingsDesc,
               value: prefs.pushEnabled,
               onChanged: (v) async {
+                if (v) {
+                  // The settings toggle must explicitly request browser/OS
+                  // permission and register the FCM token before enabling push.
+                  final token = await FCMService.instance
+                      .requestPermissionAndGetToken();
+                  if (!context.mounted) return;
+                  if (token == null) {
+                    final message = kIsWeb
+                        ? 'Notifications are blocked for this site. Allow them in your browser site settings, then try again.'
+                        : 'Notification permission was not granted. Enable notifications in your device settings, then try again.';
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text(message)),
+                    );
+                    return;
+                  }
+                }
                 await svc.togglePush(v);
                 analytics.track(
                   v

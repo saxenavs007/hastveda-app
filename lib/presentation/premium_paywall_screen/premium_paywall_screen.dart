@@ -39,7 +39,7 @@ class _PremiumPaywallScreenState extends State<PremiumPaywallScreen>
     with SingleTickerProviderStateMixin {
   bool _isLoading = false;
   bool _isVerifying = false; // true while polling/verifying after SDK callback
-  final bool _isCouponLoading = false;
+  bool _isCouponLoading = false;
   String _couponCode = '';
   String? _couponError;
   String? _couponSuccess;
@@ -84,11 +84,112 @@ class _PremiumPaywallScreenState extends State<PremiumPaywallScreen>
       _couponCode = value.trim().toUpperCase();
       _couponError = null;
       _couponSuccess = null;
-      if (value.isEmpty) {
-        _discountAmount = null;
-        _finalAmount = null;
-      }
+      _discountAmount = null;
+      _finalAmount = null;
+      _baseAmount = null;
+      _gstAmount = null;
     });
+  }
+
+  Future<void> _applyCoupon() async {
+    final code = _couponController.text.trim().toUpperCase();
+    if (code.isEmpty || _isCouponLoading) return;
+
+    setState(() {
+      _isCouponLoading = true;
+      _couponError = null;
+      _couponSuccess = null;
+      _discountAmount = null;
+      _finalAmount = null;
+      _baseAmount = null;
+      _gstAmount = null;
+      _couponCode = code;
+    });
+
+    try {
+      final client = Supabase.instance.client;
+      final user = client.auth.currentUser;
+      if (user == null) {
+        throw Exception('Please sign in before applying a discount code.');
+      }
+
+      final coupon = await client
+          .from('discount_codes')
+          .select('id, code, discount_type, discount_value, max_redemptions, max_per_customer, used_count, assigned_user_id, assigned_email, expires_at, is_active')
+          .eq('code', code)
+          .maybeSingle();
+
+      if (coupon == null || coupon['is_active'] != true) {
+        throw Exception('Invalid or inactive discount code.');
+      }
+      final expiresAt = coupon['expires_at'];
+      if (expiresAt != null &&
+          DateTime.parse(expiresAt.toString()).isBefore(DateTime.now())) {
+        throw Exception('This discount code has expired.');
+      }
+      if ((coupon['used_count'] as num? ?? 0) >=
+          (coupon['max_redemptions'] as num? ?? 1)) {
+        throw Exception('This discount code has already been used.');
+      }
+      if (coupon['assigned_user_id'] != null &&
+          coupon['assigned_user_id'] != user.id) {
+        throw Exception('This discount code is not assigned to your account.');
+      }
+      final assignedEmail = coupon['assigned_email']?.toString().trim().toLowerCase();
+      if (assignedEmail != null &&
+          assignedEmail.isNotEmpty &&
+          assignedEmail != (user.email ?? '').trim().toLowerCase()) {
+        throw Exception('This discount code is not assigned to your account.');
+      }
+
+      final redemption = await client
+          .from('coupon_redemptions')
+          .select('id')
+          .eq('coupon_id', coupon['id'])
+          .eq('user_id', user.id)
+          .eq('payment_status', 'success')
+          .limit(1);
+      if (redemption.isNotEmpty) {
+        throw Exception('You have already used this discount code.');
+      }
+
+      final value = (coupon['discount_value'] as num).toDouble();
+      final rawDiscount = coupon['discount_type'] == 'percentage'
+          ? CashfreePaymentService.launchPrice * value / 100
+          : value;
+      final discount = ((rawDiscount.clamp(
+                0.0,
+                CashfreePaymentService.launchPrice - 1.0,
+              ) * 100)
+              .round()) /
+          100;
+      final base = CashfreePaymentService.launchPrice - discount;
+      final gst = ((base * 0.18 * 100).round()) / 100;
+      final total = ((base + gst) * 100).round() / 100;
+
+      if (!mounted) return;
+      setState(() {
+        _discountAmount = discount;
+        _baseAmount = base;
+        _gstAmount = gst;
+        _finalAmount = total;
+        _couponSuccess = discount > 0
+            ? 'Code applied — you save ₹${discount.toStringAsFixed(2)}. Pay ₹${total.toStringAsFixed(2)} including GST.'
+            : 'Code applied successfully.';
+      });
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _couponError = e.toString().replaceFirst('Exception: ', '');
+          _discountAmount = null;
+          _finalAmount = null;
+          _baseAmount = null;
+          _gstAmount = null;
+        });
+      }
+    } finally {
+      if (mounted) setState(() => _isCouponLoading = false);
+    }
   }
 
   Future<void> _onUnlockTapped() async {
@@ -754,6 +855,35 @@ class _PremiumPaywallScreenState extends State<PremiumPaywallScreen>
                 ),
               ),
             ],
+          ),
+          const SizedBox(height: 10),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: _isCouponLoading || _couponCode.isEmpty
+                  ? null
+                  : _applyCoupon,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppTheme.primary,
+                foregroundColor: Colors.white,
+                disabledBackgroundColor: AppTheme.primary.withAlpha(70),
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+              ),
+              child: _isCouponLoading
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    )
+                  : Text('Apply Discount Code',
+                      style: GoogleFonts.outfit(fontWeight: FontWeight.w700)),
+            ),
           ),
           if (_couponError != null) ...[
             const SizedBox(height: 6),

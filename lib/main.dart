@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart' show ProviderScope;
@@ -36,6 +37,29 @@ Future<void> main() async {
     debugPrint('[HastVeda] Path URL strategy skipped: $e');
   }
   WidgetsFlutterBinding.ensureInitialized();
+  // FCM requires Firebase to be initialized before FirebaseMessaging.instance
+  // is accessed. Web needs explicit options; native platforms use their
+  // platform configuration (for example Android google-services.json).
+  try {
+    if (Firebase.apps.isEmpty) {
+      if (kIsWeb) {
+        await Firebase.initializeApp(
+          options: const FirebaseOptions(
+            apiKey: 'AIzaSyBHBakAGVgamWXBBl_mFHCicOEHl61Z8fI',
+            appId: '1:412267977624:web:c85847f932d18ec69869ed',
+            messagingSenderId: '412267977624',
+            projectId: 'hastveda-notifications',
+            authDomain: 'hastveda-notifications.firebaseapp.com',
+            storageBucket: 'hastveda-notifications.appfirebasestorage.app',
+          ),
+        );
+      } else {
+        await Firebase.initializeApp();
+      }
+    }
+  } catch (e) {
+    debugPrint('[HastVeda] Firebase initialization failed: $e');
+  }
   registerFcmBackgroundHandler();
 
   // ── Global Flutter error handler ─────────────────────────────────────────
