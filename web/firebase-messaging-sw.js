@@ -5,7 +5,7 @@ firebase.initializeApp({
   apiKey: "AIzaSyBHBakAGVgamWXBBl_mFHCicOEHl61Z8fI",
   authDomain: "hastveda-notifications.firebaseapp.com",
   projectId: "hastveda-notifications",
-  storageBucket: "hastveda-notifications.appfirebasestorage.app",
+  storageBucket: "hastveda-notifications.app.firebasestorage.app",
   messagingSenderId: "412267977624",
   appId: "1:412267977624:web:c85847f932d18ec69869ed"
 });
