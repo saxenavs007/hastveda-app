@@ -137,10 +137,15 @@ class FCMService {
         });
       }
       userId = auth.currentUser?.id;
-    } catch (_) {
+    } catch (e, stack) {
+      debugPrint('[FCM][stage=auth_lookup] Failed: $e');
+      debugPrint('[FCM][stage=auth_lookup] Stack: $stack');
       return;
     }
-    if (userId == null) return;
+    if (userId == null) {
+      debugPrint('[FCM][stage=auth_lookup] No signed-in Supabase user; deferring token registration.');
+      return;
+    }
     if (_initializedForUser == userId && await isPermissionGranted()) return;
 
     try {
@@ -151,11 +156,18 @@ class FCMService {
           persistToken(newToken);
         });
       }
+      debugPrint('[FCM][stage=initialize] Starting permission/token flow.');
       final token = await requestPermissionAndGetToken();
-      if (token != null) _initializedForUser = userId;
-    } catch (e) {
+      if (token != null) {
+        _initializedForUser = userId;
+        debugPrint('[FCM][stage=initialize] Completed successfully.');
+      } else {
+        debugPrint('[FCM][stage=initialize] Flow returned no token.');
+      }
+    } catch (e, stack) {
       _initializedForUser = null;
-      debugPrint('[FCM] Initialization error: $e');
+      debugPrint('[FCM][stage=initialize] Failed: $e');
+      debugPrint('[FCM][stage=initialize] Stack: $stack');
     }
   }
 
@@ -202,7 +214,9 @@ class FCMService {
       debugPrint('[FCM] Firebase is not initialized; cannot generate token.');
       return null;
     }
+    var stage = 'request_permission';
     try {
+      debugPrint('[FCM][stage=$stage] Requesting browser notification permission.');
       final settings = await _firebaseMessaging.requestPermission(
         alert: true,
         badge: true,
@@ -212,6 +226,8 @@ class FCMService {
       final granted =
           settings.authorizationStatus == AuthorizationStatus.authorized ||
               settings.authorizationStatus == AuthorizationStatus.provisional;
+      debugPrint('[FCM][stage=$stage] Permission status: ${settings.authorizationStatus}; granted=$granted.');
+      stage = 'save_permission_preferences';
       final prefs = await SharedPreferences.getInstance();
       await prefs.setBool(_prefPermissionGranted, granted);
       await prefs.setBool(_prefPermissionRequested, true);
@@ -220,6 +236,8 @@ class FCMService {
         return null;
       }
 
+      stage = 'get_fcm_token';
+      debugPrint('[FCM][stage=$stage] Requesting token; web=$kIsWeb.');
       final token = await _firebaseMessaging.getToken(
         vapidKey: kIsWeb ? _vapidKey : null,
       );
@@ -228,11 +246,14 @@ class FCMService {
         return null;
       }
       _currentToken = token;
+      debugPrint('[FCM][stage=get_fcm_token] Token generated (value intentionally not logged).');
+      stage = 'persist_token';
       await persistToken(token);
-      debugPrint('[FCM] Token generated and saved.');
+      debugPrint('[FCM][stage=persist_token] Persistence method returned.');
       return token;
-    } catch (e) {
-      debugPrint('[FCM] Error during FCM initialization: $e');
+    } catch (e, stack) {
+      debugPrint('[FCM][stage=$stage] Failed: $e');
+      debugPrint('[FCM][stage=$stage] Stack: $stack');
       return null;
     }
   }
@@ -282,8 +303,9 @@ class FCMService {
       await prefs.setString(_prefFcmUser, userId);
       _currentToken = token;
       debugPrint('[FCM] Token persisted to Supabase.');
-    } catch (e) {
-      debugPrint('[FCM] Token persistence error: $e');
+    } catch (e, stack) {
+      debugPrint('[FCM][stage=supabase_persist] Failed: $e');
+      debugPrint('[FCM][stage=supabase_persist] Stack: $stack');
     }
   }
 
