@@ -4,7 +4,7 @@
 //
 // Security guarantees:
 // 1. Verifies question belongs to authenticated user (or uses service-role for internal calls)
-// 2. Verifies a free question is within Premium's 2 per IST month, OR has its own paid ₹50 + GST order
+// 2. Verifies a free question is within Premium's 2 per lifetime, OR has its own paid ₹50 + GST order
 //    Paid questions have no monthly cap: each successful Cashfree order answers one question.
 // 3. Prevents double-processing (idempotent)
 // 4. Never allows unpaid ₹50 questions to be answered
@@ -26,17 +26,8 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type",
 };
 
-const FREE_QUESTIONS_PER_MONTH = 2;
+const FREE_QUESTIONS_LIFETIME = 2;
 
-function istMonthStartIso(): string {
-  const shifted = new Date(Date.now() + 330 * 60 * 1000);
-  const monthStartUtc = Date.UTC(
-    shifted.getUTCFullYear(),
-    shifted.getUTCMonth(),
-    1,
-  );
-  return new Date(monthStartUtc - 330 * 60 * 1000).toISOString();
-}
 
 // ── HastVeda AI system prompt ─────────────────────────────────────────────────
 const HASTVEDA_SYSTEM_PROMPT = `You are HastVeda, an ancient and wise palm reading oracle deeply rooted in Indian Vedic tradition and palmistry. You have profound knowledge of:
@@ -211,17 +202,16 @@ async function processQuestion(
       .from("question_usage")
       .select("id", { count: "exact", head: true })
       .eq("user_id", userId)
-      .eq("is_free", true)
-      .gte("created_at", istMonthStartIso());
+      .eq("is_free", true);
 
-    if ((freeCount ?? 0) > FREE_QUESTIONS_PER_MONTH) {
+    if ((freeCount ?? 0) > FREE_QUESTIONS_LIFETIME) {
       await supabase
         .from("question_usage")
         .update({ status: "rejected_free_quota_exceeded", updated_at: new Date().toISOString() })
         .eq("id", questionUsageId);
 
       return new Response(
-        JSON.stringify({ error: "Free question quota exceeded. Premium includes 2 free questions each month. Additional questions cost ₹50 + GST." }),
+        JSON.stringify({ error: "Free question quota exceeded. Premium includes 2 free questions in a lifetime. Additional questions cost ₹50 + 18% GST (₹59 total)." }),
         { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
