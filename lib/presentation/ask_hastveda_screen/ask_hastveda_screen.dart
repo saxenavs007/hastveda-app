@@ -10,6 +10,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:flutter_tts/flutter_tts.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -1554,14 +1555,55 @@ class _AskHastVedaScreenState extends State<AskHastVedaScreen> {
                                 ],
                               ),
                               const SizedBox(height: 8),
-                              Text(
-                                q['answer_text'] as String,
-                                softWrap: true,
-                                overflow: TextOverflow.visible,
-                                style: GoogleFonts.outfit(
-                                  fontSize: 13,
-                                  color: textPri,
-                                  height: 1.6,
+                              MarkdownBody(
+                                data: q['answer_text'] as String,
+                                selectable: true,
+                                styleSheet: MarkdownStyleSheet(
+                                  p: GoogleFonts.outfit(
+                                    fontSize: 13,
+                                    color: textPri,
+                                    height: 1.6,
+                                  ),
+                                  h1: GoogleFonts.outfit(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.w700,
+                                    color: textPri,
+                                  ),
+                                  h2: GoogleFonts.outfit(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w700,
+                                    color: textPri,
+                                  ),
+                                  h3: GoogleFonts.outfit(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w700,
+                                    color: textPri,
+                                  ),
+                                  strong: GoogleFonts.outfit(
+                                    fontWeight: FontWeight.w700,
+                                    color: textPri,
+                                  ),
+                                  listBullet: GoogleFonts.outfit(
+                                    fontSize: 13,
+                                    color: textPri,
+                                    height: 1.6,
+                                  ),
+                                  blockquote: GoogleFonts.outfit(
+                                    fontSize: 13,
+                                    color: textPri,
+                                    height: 1.6,
+                                  ),
+                                  code: GoogleFonts.robotoMono(
+                                    fontSize: 12,
+                                    color: textPri,
+                                  ),
+                                  horizontalRuleDecoration: BoxDecoration(
+                                    border: Border(
+                                      top: BorderSide(
+                                        color: textPri.withAlpha(50),
+                                      ),
+                                    ),
+                                  ),
                                 ),
                               ),
                             ],
