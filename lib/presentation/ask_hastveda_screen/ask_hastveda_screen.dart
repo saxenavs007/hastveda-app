@@ -875,7 +875,6 @@ class _AskHastVedaScreenState extends State<AskHastVedaScreen> {
         await SupabaseService.instance.client
             .from('question_usage')
             .update({
-              'is_paid': true,
               'status': 'pending',
               'updated_at': DateTime.now().toIso8601String(),
             })
