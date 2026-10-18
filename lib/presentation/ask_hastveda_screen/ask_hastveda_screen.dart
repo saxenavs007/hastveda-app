@@ -484,7 +484,7 @@ class _AskHastVedaScreenState extends State<AskHastVedaScreen> {
           children: [
             Text(
               _isHindi
-                  ? 'आपका ₹50 भुगतान सफल रहा लेकिन ऐप बंद हो गया। कृपया अपना प्रश्न दोबारा दर्ज करें।'
+                  ? 'आपका ₹59 भुगतान सफल रहा लेकिन ऐप बंद हो गया। कृपया अपना प्रश्न दोबारा दर्ज करें।'
                   : 'Your ₹59 payment was successful but the app closed. Please re-enter your question.',
             ),
             const SizedBox(height: 12),
@@ -1085,7 +1085,7 @@ class _AskHastVedaScreenState extends State<AskHastVedaScreen> {
                     Text(
                       hasFreeLeft
                           ? (_isHindi
-                                ? 'इस महीने $freeLeft मुफ़्त प्रश्न शेष'
+                                ? 'जीवनभर के $freeLeft मुफ़्त प्रश्न शेष'
                                 : '$freeLeft of 2 lifetime free questions left')
                           : _isPremiumUser
                           ? (_isHindi
