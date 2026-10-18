@@ -55,7 +55,17 @@ async function triggerQuestionAnswerIfReady(
     .maybeSingle();
 
   if (error) throw new Error(`Could not load paid question: ${error.message}`);
-  if (!question || !(question.question_text ?? "").trim()) return;
+  if (!question) return;
+  if (!(question.question_text ?? "").trim()) {
+    if (question.status !== "payment_received_pending_question") {
+      const { error: recoveryError } = await supabase
+        .from("question_usage")
+        .update({ is_paid: true, status: "payment_received_pending_question", updated_at: new Date().toISOString() })
+        .eq("id", question.id);
+      if (recoveryError) throw new Error(`Could not preserve payment recovery record: ${recoveryError.message}`);
+    }
+    return;
+  }
   if (question.status === "answered" || question.status === "processing") return;
 
   const { error: updateError } = await supabase
@@ -198,19 +208,18 @@ serve(async (req: Request) => {
           .eq("user_id", orderRecord.user_id)
           .maybeSingle();
 
-        let questionId: string | null = null;
-
         if (existingQuestion) {
           await supabase
             .from("question_usage")
             .update({
               is_paid: true,
-              status: "pending",
+              status: (existingQuestion.question_text ?? "").trim()
+                ? "pending"
+                : "payment_received_pending_question",
               updated_at: new Date().toISOString(),
             })
             .eq("id", existingQuestion.id);
-          questionId = existingQuestion.id;
-          console.log(`[cashfree-webhook] Marked existing question ${questionId} as paid`);
+          console.log(`[cashfree-webhook] Marked existing question ${existingQuestion.id} as paid`);
         } else {
           console.log(`[cashfree-webhook] No question_usage row for order ${cashfreeOrderId} — creating recovery record`);
           const { data: recoveryRow } = await supabase
@@ -225,8 +234,7 @@ serve(async (req: Request) => {
             })
             .select("id")
             .maybeSingle();
-          questionId = recoveryRow?.id ?? null;
-          console.log(`[cashfree-webhook] Created recovery record: ${questionId}`);
+          console.log(`[cashfree-webhook] Created recovery record: ${recoveryRow?.id ?? null}`);
         }
 
       } else {
