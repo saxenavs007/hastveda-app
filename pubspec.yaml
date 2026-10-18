@@ -36,6 +36,7 @@ dependencies:
   in_app_review: ^2.0.12     # Google Play in-app review mechanism
   speech_to_text: ^7.4.0     # Speech-to-text for microphone input in Ask HastVeda
   flutter_tts: ^4.2.5        # Text-to-speech for reading answers aloud in Ask HastVeda
+  flutter_markdown: ^0.7.7   # Render HastVeda answers with headings, lists, and emphasis
   flutter_local_notifications: ^19.4.0 # Daily horoscope pop-ups on the phone screen
   timezone: ^0.10.1
 
