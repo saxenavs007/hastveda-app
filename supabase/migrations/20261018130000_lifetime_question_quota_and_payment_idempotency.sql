@@ -41,7 +41,7 @@ DECLARE
   v_inserted integer;
 BEGIN
   IF p_user_id IS NULL OR NULLIF(p_cashfree_order_id, '') IS NULL
-     OR p_grant_type NOT IN ('premium_quota', 'topup') OR p_credits <= 0 THEN
+     OR p_grant_type IS NULL OR p_grant_type NOT IN ('premium_quota', 'topup') OR p_credits IS NULL OR p_credits <= 0 THEN
     RAISE EXCEPTION 'Invalid question credit grant';
   END IF;
 
@@ -62,6 +62,10 @@ BEGIN
     UPDATE public.user_profiles
     SET paid_question_balance = paid_question_balance + p_credits, updated_at = now()
     WHERE id = p_user_id;
+  END IF;
+  GET DIAGNOSTICS v_inserted = ROW_COUNT;
+  IF v_inserted = 0 THEN
+    RAISE EXCEPTION 'Question credit grant failed: user profile % does not exist', p_user_id;
   END IF;
 
   RETURN jsonb_build_object('granted', true, 'grant_type', p_grant_type, 'credits', p_credits);
