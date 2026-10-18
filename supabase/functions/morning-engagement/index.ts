@@ -833,6 +833,17 @@ async function sendFcm(
               body: message.body,
             },
             data: fcmData(message.data, message.title, message.body),
+            webpush: {
+              headers: { Urgency: "high", TTL: "86400" },
+              notification: {
+                icon: "https://www.hastveda.co/icons/Icon-192.png",
+                badge: "https://www.hastveda.co/icons/Icon-192.png",
+                tag: message.collapseKey,
+              },
+              fcm_options: {
+                link: "https://www.hastveda.co/notifications",
+              },
+            },
             android: {
               priority: "HIGH",
               collapse_key: message.collapseKey,
