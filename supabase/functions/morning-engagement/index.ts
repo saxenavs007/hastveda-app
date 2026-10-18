@@ -28,17 +28,28 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-cron-secret",
 };
 
-const TITLES = [
-  "Someone Falling For You...",
-  "A Heart-Line Signal Today",
-  "Love Is Moving Closer",
+// A 14-day rotation keeps the daily push fresh; the sequence repeats only after
+// two weeks. Keep each teaser curiosity-led, not a promise or a guaranteed prediction.
+const DAILY_HOOKS = [
+  { title: "👁️ Someone Secretly Admires You?", teaser: "Hidden admirer or just a secret crush? Explore what your heart line may suggest...", question: "Based on my palm scan and heart line, could someone secretly admire me?" },
+  { title: "💗 A Heart-Line Signal Today", teaser: "One detail in your heart line may offer a fresh perspective on your love life...", question: "What might my heart line suggest about my current love life?" },
+  { title: "✨ Is Love Moving Closer?", teaser: "Curious about a new connection? Your palm reading may offer a thoughtful clue...", question: "What does my palm reading suggest about a possible new relationship?" },
+  { title: "💌 A Message You Didn't Expect?", teaser: "Wondering whether someone from your circle has feelings they haven't shared?", question: "What can my palm reading suggest about unspoken feelings around me?" },
+  { title: "🌙 A Secret Crush or Friendship?", teaser: "Could a familiar connection feel different lately? Explore the signs with HastVeda...", question: "What does my heart line suggest about friendship turning into romance?" },
+  { title: "❤️ What Is Your Heart Line Saying?", teaser: "Take a closer look at the relationship themes in your personal palm reading...", question: "What does my heart line suggest about the kind of relationship I seek?" },
+  { title: "🔮 A New Connection on the Horizon?", teaser: "Your love-life questions deserve more than guesswork. Explore your palm reading...", question: "What relationship opportunities should I stay open to, according to my palm reading?" },
+  { title: "💫 Are They Thinking About You?", teaser: "If someone is on your mind, discover what palmistry can—and cannot—tell you...", question: "What can palmistry reasonably suggest about my romantic connections?" },
+  { title: "🌹 Your Next Chapter in Love", teaser: "Your heart line offers a personal lens for reflecting on what you want next...", question: "What does my palm reading suggest I should focus on in my love life?" },
+  { title: "💞 A Relationship Turning Point?", teaser: "A fresh perspective on your heart line could help you reflect on your next step...", question: "What does my heart line suggest about changes in my relationships?" },
+  { title: "🧿 Love, Timing & Your Palm", teaser: "Thinking about timing in love? Explore a grounded interpretation of your palm lines...", question: "What does my palm reading suggest about being ready for a relationship?" },
+  { title: "💖 What Makes You Magnetic?", teaser: "Your palm reading may offer clues for reflecting on your strengths in relationships...", question: "What strengths in relationships are reflected in my palm reading?" },
+  { title: "🌟 A Clue About Your Love Pattern", teaser: "Notice the patterns you bring to relationships and explore them with HastVeda...", question: "What relationship patterns might my palm reading invite me to reflect on?" },
+  { title: "💘 Could a Crush Become More?", teaser: "Curious about where a connection could go? Start with your personal heart-line reading...", question: "What should I consider before taking a crush toward a relationship?" },
 ];
 
-const TEASER =
-  "A quiet change in your heart line suggests someone is moving closer than you think...";
-
-const QUESTION =
-  "Based on my heart line from my palm scan, is someone falling for me?";
+function dailyHook(day: Date): (typeof DAILY_HOOKS)[number] {
+  return DAILY_HOOKS[Math.abs(dayOfYear(day)) % DAILY_HOOKS.length];
+}
 
 type ServiceAccount = {
   project_id: string;
@@ -126,12 +137,12 @@ serve(async (req) => {
     const allowed = await filterOptIn(admin, activeIds);
     const notices = await morningNotices(admin, dayStart);
     const missing = allowed.filter((id) => !notices.has(id));
-    const title = TITLES[Math.abs(dayOfYear(day)) % TITLES.length];
+    const hook = dailyHook(day);\n    const title = hook.title;
     const serviceAccount = readServiceAccount();
 
     if (!dryRun) {
       const snippets = await loveSnippets(admin, missing);
-      await writeInbox(admin, missing, notices, snippets, title, istKey, dayStart);
+      await writeInbox(admin, missing, notices, snippets, hook, istKey, dayStart);
     }
 
     const tokens = await tokensFor(
@@ -469,7 +480,7 @@ async function writeInbox(
 ) {
   const rows: InboxRow[] = userIds.map((userId) => {
     const snippet = snippets.get(userId) ?? "";
-    const body = snippet ? `From your saved heart line: ${snippet}` : TEASER;
+    const body = snippet ? `From your saved heart line: ${snippet}` : hook.teaser;
     return {
       user_id: userId,
       notification_type: "new_prediction",
