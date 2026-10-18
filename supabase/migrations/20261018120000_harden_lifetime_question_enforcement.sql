@@ -1,3 +1,14 @@
+-- Ensure the columns referenced below exist on installations where the
+-- October 4 migration was not applied, without overwriting existing values.
+ALTER TABLE public.user_profiles
+  ADD COLUMN IF NOT EXISTS free_questions_used integer NOT NULL DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS free_question_period date,
+  ADD COLUMN IF NOT EXISTS free_question_quota integer NOT NULL DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS paid_question_balance integer NOT NULL DEFAULT 0;
+
+ALTER TABLE public.question_usage
+  ADD COLUMN IF NOT EXISTS paid_credit_applied boolean NOT NULL DEFAULT false;
+
 -- Harden HastVeda lifetime question enforcement.
 -- Premium grants exactly two lifetime free questions; no calendar/month reset.
 -- Serialize per-user free-question inserts to prevent concurrent requests exceeding the quota.
