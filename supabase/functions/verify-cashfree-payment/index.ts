@@ -20,7 +20,7 @@ const CASHFREE_BASE_URL = IS_SANDBOX
 const CASHFREE_API_VERSION = "2025-01-01";
 
 async function fulfillPaidOrder(
-  supabase: ReturnType<typeof createClient>,
+  supabase: ReturnType<typeof createClient<any>>,
   orderRecord: Record<string, unknown>,
   userId: string,
   paymentId: string,
@@ -126,7 +126,7 @@ serve(async (req: Request) => {
       ? Deno.env.get("CASHFREE_SANDBOX_SECRET_KEY")!
       : Deno.env.get("CASHFREE_SECRET_KEY")!;
 
-    const supabaseUser = createClient(supabaseUrl, Deno.env.get("SUPABASE_ANON_KEY")!, {
+    const supabaseUser = createClient<any>(supabaseUrl, Deno.env.get("SUPABASE_ANON_KEY")!, {
       global: { headers: { Authorization: authHeader } },
     });
 
@@ -138,7 +138,7 @@ serve(async (req: Request) => {
       );
     }
 
-    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    const supabase = createClient<any>(supabaseUrl, supabaseServiceKey);
 
     // ── Parse request ─────────────────────────────────────────
     const body = await req.json();
