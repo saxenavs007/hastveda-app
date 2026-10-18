@@ -103,7 +103,7 @@ serve(async (req: Request) => {
       }
 
       authenticatedUserId = user_id;
-      return await processQuestion(supabase, question_usage_id, authenticatedUserId, awsLambdaUrl ?? null, geminiApiKey ?? null, corsHeaders, true);
+      return await processQuestion(supabase, String(question_usage_id), String(user_id), awsLambdaUrl ?? null, geminiApiKey ?? null, corsHeaders, true);
     }
 
     // External call from Flutter — verify JWT
