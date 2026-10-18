@@ -137,7 +137,8 @@ serve(async (req) => {
     const allowed = await filterOptIn(admin, activeIds);
     const notices = await morningNotices(admin, dayStart);
     const missing = allowed.filter((id) => !notices.has(id));
-    const hook = dailyHook(day);\n    const title = hook.title;
+    const hook = dailyHook(day);
+    const title = hook.title;
     const serviceAccount = readServiceAccount();
 
     if (!dryRun) {
