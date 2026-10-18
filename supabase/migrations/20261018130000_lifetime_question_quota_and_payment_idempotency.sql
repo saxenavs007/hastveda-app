@@ -127,7 +127,7 @@ $$;
 CREATE OR REPLACE FUNCTION public.protect_question_billing_fields()
 RETURNS trigger
 LANGUAGE plpgsql SECURITY DEFINER SET search_path = public
-AS $
+AS $$
 BEGIN
   IF COALESCE(auth.role(), '') <> 'service_role' AND (
     NEW.user_id IS DISTINCT FROM OLD.user_id OR
@@ -141,7 +141,7 @@ BEGIN
   END IF;
   RETURN NEW;
 END;
-$;
+$$;
 
 DROP TRIGGER IF EXISTS trg_00_protect_question_billing_fields ON public.question_usage;
 CREATE TRIGGER trg_00_protect_question_billing_fields
