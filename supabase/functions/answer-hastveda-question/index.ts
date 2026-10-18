@@ -81,7 +81,7 @@ serve(async (req: Request) => {
     const isInternalCall = req.headers.get("x-internal-call") !== null;
     const authHeader = req.headers.get("Authorization");
 
-    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    const supabase = createClient<any>(supabaseUrl, supabaseServiceKey);
 
     let authenticatedUserId: string | null = null;
 
@@ -114,7 +114,7 @@ serve(async (req: Request) => {
       );
     }
 
-    const supabaseUser = createClient(supabaseUrl, Deno.env.get("SUPABASE_ANON_KEY")!, {
+    const supabaseUser = createClient<any>(supabaseUrl, Deno.env.get("SUPABASE_ANON_KEY")!, {
       global: { headers: { Authorization: authHeader } },
     });
 
@@ -150,7 +150,7 @@ serve(async (req: Request) => {
 });
 
 async function processQuestion(
-  supabase: ReturnType<typeof createClient>,
+  supabase: ReturnType<typeof createClient<any>>,
   questionUsageId: string,
   userId: string,
   awsLambdaUrl: string | null,
