@@ -1,6 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-type SupabaseClient = ReturnType<typeof createClient>;
+type SupabaseClient = ReturnType<typeof createClient<any>>;
 
 const PREMIUM_FREE_QUESTIONS = 2; // lifetime allowance for a one-time Premium purchase
 const TOPUP_QUESTION_CREDIT = 1; // one paid question, no monthly cap
