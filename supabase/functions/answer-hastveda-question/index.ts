@@ -201,13 +201,35 @@ async function processQuestion(
     );
   }
 
+  // ── Question text validation ──────────────────────────────
+  const questionText = (question.question_text ?? "").trim();
+  if (!questionText) {
+    await supabase
+      .from("question_usage")
+      .update({ status: "failed_empty_question", updated_at: new Date().toISOString() })
+      .eq("id", questionUsageId);
+
+    return new Response(
+      JSON.stringify({ error: "Question text is empty." }),
+      { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
+  }
+
   // ── Legitimacy check: free question ──────────────────────
   if (question.is_free === true) {
-    const { count: freeCount } = await supabase
+    const { count: freeCount, error: freeCountError } = await supabase
       .from("question_usage")
       .select("id", { count: "exact", head: true })
       .eq("user_id", userId)
       .eq("is_free", true);
+
+    if (freeCountError) {
+      console.error("[answer-hastveda-question] Lifetime quota check failed", freeCountError);
+      return new Response(
+        JSON.stringify({ error: "Unable to verify lifetime question allowance. Please retry." }),
+        { status: 503, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
 
     if ((freeCount ?? 0) > FREE_QUESTIONS_LIFETIME) {
       await supabase
@@ -309,20 +331,6 @@ async function processQuestion(
         { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
-  }
-
-  // ── Question text validation ──────────────────────────────
-  const questionText = (question.question_text ?? "").trim();
-  if (!questionText) {
-    await supabase
-      .from("question_usage")
-      .update({ status: "failed_empty_question", updated_at: new Date().toISOString() })
-      .eq("id", questionUsageId);
-
-    return new Response(
-      JSON.stringify({ error: "Question text is empty." }),
-      { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
   }
 
   // ── Mark as processing (prevents duplicate calls) ─────────
