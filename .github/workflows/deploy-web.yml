@@ -65,7 +65,7 @@ jobs:
       - name: Build release web app
         run: |
           flutter build web --release \
-            --base-href "/${{ github.event.repository.name }}/" \
+            --base-href "/" \
             --pwa-strategy=none \
             --dart-define-from-file=ci-defines.json
           cp web/sw.js build/web/sw.js
