@@ -86,6 +86,12 @@ serve(async (req: Request) => {
     let authenticatedUserId: string | null = null;
 
     if (isInternalCall) {
+      if (authHeader !== `Bearer ${supabaseServiceKey}`) {
+        return new Response(
+          JSON.stringify({ error: "Unauthorized internal call" }),
+          { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
       const body = await req.json();
       const { question_usage_id, user_id } = body;
 
