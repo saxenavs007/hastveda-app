@@ -273,7 +273,7 @@ async function processQuestion(
 
     const { data: paymentOrder } = await supabase
       .from("cashfree_orders")
-      .select("status, product_id, user_id")
+      .select("status, product_id, user_id, final_amount, currency")
       .eq("cashfree_order_id", question.payment_order_id)
       .maybeSingle();
 
@@ -296,6 +296,17 @@ async function processQuestion(
       console.error(`[answer-hastveda-question] Payment user mismatch`);
       return new Response(
         JSON.stringify({ error: "Payment does not belong to this user." }),
+        { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    if (Number(paymentOrder.final_amount) !== 59 || paymentOrder.currency !== "INR") {
+      console.error("[answer-hastveda-question] Ask-question order amount/currency mismatch", {
+        amount: paymentOrder.final_amount,
+        currency: paymentOrder.currency,
+      });
+      return new Response(
+        JSON.stringify({ error: "This question requires a verified ₹59 INR payment." }),
         { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
