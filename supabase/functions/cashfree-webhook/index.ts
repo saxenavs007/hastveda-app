@@ -7,7 +7,7 @@ import {
 } from "../_shared/payment_fulfillment.ts";
 
 async function settlePaidOrder(
-  supabase: ReturnType<typeof createClient>,
+  supabase: ReturnType<typeof createClient<any>>,
   orderRecord: Record<string, unknown>,
   paymentId: string,
   isAskQuestion: boolean,
@@ -102,7 +102,7 @@ serve(async (req: Request) => {
       ? Deno.env.get("CASHFREE_SANDBOX_SECRET_KEY")!
       : Deno.env.get("CASHFREE_SECRET_KEY")!;
 
-    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    const supabase = createClient<any>(supabaseUrl, supabaseServiceKey);
 
     // ── Webhook signature verification ────────────────────────
     const rawBody = await req.text();
