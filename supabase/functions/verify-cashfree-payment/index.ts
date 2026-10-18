@@ -258,7 +258,7 @@ serve(async (req: Request) => {
 
       const { data: questionRow, error: questionFetchError } = await supabase
         .from("question_usage")
-        .select("id, status, is_paid")
+        .select("id, status, is_paid, question_text")
         .eq("payment_order_id", cashfree_order_id)
         .eq("user_id", user.id)
         .maybeSingle();
@@ -272,7 +272,9 @@ serve(async (req: Request) => {
           .from("question_usage")
           .update({
             is_paid: true,
-            status: "pending",
+            status: (questionRow.question_text ?? "").trim()
+              ? "pending"
+              : "payment_received_pending_question",
             updated_at: new Date().toISOString(),
           })
           .eq("id", questionRow.id);
