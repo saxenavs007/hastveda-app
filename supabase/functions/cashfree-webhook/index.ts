@@ -41,7 +41,7 @@ async function settlePaidOrder(
 
 
 async function triggerQuestionAnswerIfReady(
-  supabase: ReturnType<typeof createClient>,
+  supabase: ReturnType<typeof createClient<any>>,
   supabaseUrl: string,
   serviceKey: string,
   cashfreeOrderId: string,
