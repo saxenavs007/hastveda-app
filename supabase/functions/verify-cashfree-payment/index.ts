@@ -68,7 +68,17 @@ async function triggerQuestionAnswerIfReady(
     .maybeSingle();
 
   if (error) throw new Error(`Could not load paid question: ${error.message}`);
-  if (!question || !(question.question_text ?? "").trim()) return;
+  if (!question) return;
+  if (!(question.question_text ?? "").trim()) {
+    if (question.status !== "payment_received_pending_question") {
+      const { error: recoveryError } = await supabase
+        .from("question_usage")
+        .update({ is_paid: true, status: "payment_received_pending_question", updated_at: new Date().toISOString() })
+        .eq("id", question.id);
+      if (recoveryError) throw new Error(`Could not preserve payment recovery record: ${recoveryError.message}`);
+    }
+    return;
+  }
   if (question.status === "answered" || question.status === "processing") return;
 
   const { error: updateError } = await supabase
