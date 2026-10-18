@@ -221,6 +221,30 @@ serve(async (req: Request) => {
     const cashfreeData = await cashfreeResponse.json();
     const orderStatus = cashfreeData.order_status;
 
+    // Never fulfil an order unless Cashfree's amount and currency match our server-side order record.
+    const expectedAmount = Number(orderRecord.final_amount);
+    const cashfreeAmount = Number(cashfreeData.order_amount);
+    const expectedCurrency = String(orderRecord.currency ?? "INR");
+    const cashfreeCurrency = String(cashfreeData.order_currency ?? "");
+    if (
+      !Number.isFinite(expectedAmount) ||
+      !Number.isFinite(cashfreeAmount) ||
+      Math.abs(expectedAmount - cashfreeAmount) > 0.01 ||
+      expectedCurrency !== cashfreeCurrency
+    ) {
+      console.error("[verify-cashfree-payment] Cashfree order amount/currency mismatch", {
+        cashfree_order_id,
+        expectedAmount,
+        cashfreeAmount,
+        expectedCurrency,
+        cashfreeCurrency,
+      });
+      return new Response(
+        JSON.stringify({ error: "Payment amount/currency does not match the order. Please contact support before retrying." }),
+        { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     if (orderStatus !== "PAID") {
       const mappedStatus =
         orderStatus === "CANCELLED" ? "payment_cancelled" :
