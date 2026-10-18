@@ -1,0 +1,36 @@
+name: Check Ask HastVeda Edge Functions
+
+on:
+  push:
+    paths:
+      - "supabase/functions/answer-hastveda-question/**"
+      - "supabase/functions/verify-cashfree-payment/**"
+      - "supabase/functions/cashfree-webhook/**"
+      - "supabase/functions/_shared/payment_fulfillment.ts"
+      - "supabase/migrations/**"
+      - ".github/workflows/supabase-functions-check.yml"
+  pull_request:
+    paths:
+      - "supabase/functions/answer-hastveda-question/**"
+      - "supabase/functions/verify-cashfree-payment/**"
+      - "supabase/functions/cashfree-webhook/**"
+      - "supabase/functions/_shared/payment_fulfillment.ts"
+      - "supabase/migrations/**"
+      - ".github/workflows/supabase-functions-check.yml"
+
+jobs:
+  deno-check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Deno
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: Type-check answer function
+        run: deno check supabase/functions/answer-hastveda-question/index.ts
+      - name: Type-check Cashfree verification
+        run: deno check supabase/functions/verify-cashfree-payment/index.ts
+      - name: Type-check Cashfree webhook
+        run: deno check supabase/functions/cashfree-webhook/index.ts

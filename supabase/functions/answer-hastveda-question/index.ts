@@ -4,7 +4,7 @@
 //
 // Security guarantees:
 // 1. Verifies question belongs to authenticated user (or uses service-role for internal calls)
-// 2. Verifies a free question is within Premium's 2 per IST month, OR has its own paid ₹50 + GST order
+// 2. Verifies a free question is within Premium's 2-per-lifetime allowance, OR has its own paid ₹59 order
 //    Paid questions have no monthly cap: each successful Cashfree order answers one question.
 // 3. Prevents double-processing (idempotent)
 // 4. Never allows unpaid ₹50 questions to be answered
@@ -26,17 +26,7 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type",
 };
 
-const FREE_QUESTIONS_PER_MONTH = 2;
-
-function istMonthStartIso(): string {
-  const shifted = new Date(Date.now() + 330 * 60 * 1000);
-  const monthStartUtc = Date.UTC(
-    shifted.getUTCFullYear(),
-    shifted.getUTCMonth(),
-    1,
-  );
-  return new Date(monthStartUtc - 330 * 60 * 1000).toISOString();
-}
+const FREE_QUESTIONS_LIFETIME = 2;
 
 // ── HastVeda AI system prompt ─────────────────────────────────────────────────
 const HASTVEDA_SYSTEM_PROMPT = `You are HastVeda, an ancient and wise palm reading oracle deeply rooted in Indian Vedic tradition and palmistry. You have profound knowledge of:
@@ -91,11 +81,17 @@ serve(async (req: Request) => {
     const isInternalCall = req.headers.get("x-internal-call") !== null;
     const authHeader = req.headers.get("Authorization");
 
-    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    const supabase = createClient<any>(supabaseUrl, supabaseServiceKey);
 
     let authenticatedUserId: string | null = null;
 
     if (isInternalCall) {
+      if (authHeader !== `Bearer ${supabaseServiceKey}`) {
+        return new Response(
+          JSON.stringify({ error: "Unauthorized internal call" }),
+          { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
       const body = await req.json();
       const { question_usage_id, user_id } = body;
 
@@ -107,7 +103,7 @@ serve(async (req: Request) => {
       }
 
       authenticatedUserId = user_id;
-      return await processQuestion(supabase, question_usage_id, authenticatedUserId, awsLambdaUrl ?? null, geminiApiKey ?? null, corsHeaders, true);
+      return await processQuestion(supabase, String(question_usage_id), String(user_id), awsLambdaUrl ?? null, geminiApiKey ?? null, corsHeaders, true);
     }
 
     // External call from Flutter — verify JWT
@@ -118,7 +114,7 @@ serve(async (req: Request) => {
       );
     }
 
-    const supabaseUser = createClient(supabaseUrl, Deno.env.get("SUPABASE_ANON_KEY")!, {
+    const supabaseUser = createClient<any>(supabaseUrl, Deno.env.get("SUPABASE_ANON_KEY")!, {
       global: { headers: { Authorization: authHeader } },
     });
 
@@ -154,7 +150,7 @@ serve(async (req: Request) => {
 });
 
 async function processQuestion(
-  supabase: ReturnType<typeof createClient>,
+  supabase: ReturnType<typeof createClient<any>>,
   questionUsageId: string,
   userId: string,
   awsLambdaUrl: string | null,
@@ -205,23 +201,44 @@ async function processQuestion(
     );
   }
 
+  // ── Question text validation ──────────────────────────────
+  const questionText = (question.question_text ?? "").trim();
+  if (!questionText) {
+    await supabase
+      .from("question_usage")
+      .update({ status: "failed_empty_question", updated_at: new Date().toISOString() })
+      .eq("id", questionUsageId);
+
+    return new Response(
+      JSON.stringify({ error: "Question text is empty." }),
+      { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
+  }
+
   // ── Legitimacy check: free question ──────────────────────
   if (question.is_free === true) {
-    const { count: freeCount } = await supabase
+    const { count: freeCount, error: freeCountError } = await supabase
       .from("question_usage")
       .select("id", { count: "exact", head: true })
       .eq("user_id", userId)
-      .eq("is_free", true)
-      .gte("created_at", istMonthStartIso());
+      .eq("is_free", true);
 
-    if ((freeCount ?? 0) > FREE_QUESTIONS_PER_MONTH) {
+    if (freeCountError) {
+      console.error("[answer-hastveda-question] Lifetime quota check failed", freeCountError);
+      return new Response(
+        JSON.stringify({ error: "Unable to verify lifetime question allowance. Please retry." }),
+        { status: 503, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    if ((freeCount ?? 0) > FREE_QUESTIONS_LIFETIME) {
       await supabase
         .from("question_usage")
         .update({ status: "rejected_free_quota_exceeded", updated_at: new Date().toISOString() })
         .eq("id", questionUsageId);
 
       return new Response(
-        JSON.stringify({ error: "Free question quota exceeded. Premium includes 2 free questions each month. Additional questions cost ₹50 + GST." }),
+        JSON.stringify({ error: "Lifetime free question limit reached. Premium includes 2 free questions once. Additional questions cost ₹59 including GST." }),
         { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -256,7 +273,7 @@ async function processQuestion(
 
     const { data: paymentOrder } = await supabase
       .from("cashfree_orders")
-      .select("status, product_id, user_id")
+      .select("status, product_id, user_id, final_amount, currency")
       .eq("cashfree_order_id", question.payment_order_id)
       .maybeSingle();
 
@@ -283,11 +300,22 @@ async function processQuestion(
       );
     }
 
+    if (Number(paymentOrder.final_amount) !== 59 || paymentOrder.currency !== "INR") {
+      console.error("[answer-hastveda-question] Ask-question order amount/currency mismatch", {
+        amount: paymentOrder.final_amount,
+        currency: paymentOrder.currency,
+      });
+      return new Response(
+        JSON.stringify({ error: "This question requires a verified ₹59 INR payment." }),
+        { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     const { count: usageCount } = await supabase
       .from("question_usage")
       .select("id", { count: "exact", head: true })
       .eq("payment_order_id", question.payment_order_id)
-      .eq("status", "answered");
+      .neq("id", questionUsageId);
 
     if ((usageCount ?? 0) > 0) {
       return new Response(
@@ -296,33 +324,41 @@ async function processQuestion(
       );
     }
 
-    const { error: consumeError } = await supabase.rpc("consume_paid_question_credit", {
+    const { data: creditResult, error: consumeError } = await supabase.rpc("consume_paid_question_credit", {
       p_question_id: questionUsageId,
     });
     if (consumeError) {
       console.error("[answer-hastveda-question] paid credit consume failed", consumeError);
+      return new Response(
+        JSON.stringify({ error: "Payment was verified but the question credit could not be confirmed. Please retry; do not pay again." }),
+        { status: 503, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+    const credit = creditResult as { consumed?: boolean; reason?: string } | null;
+    if (credit?.consumed !== true) {
+      console.error("[answer-hastveda-question] paid credit rejected", credit);
+      return new Response(
+        JSON.stringify({ error: "No unused question credit is available for this payment. Please contact support; do not pay again." }),
+        { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     }
   }
 
-  // ── Question text validation ──────────────────────────────
-  const questionText = (question.question_text ?? "").trim();
-  if (!questionText) {
-    await supabase
-      .from("question_usage")
-      .update({ status: "failed_empty_question", updated_at: new Date().toISOString() })
-      .eq("id", questionUsageId);
-
-    return new Response(
-      JSON.stringify({ error: "Question text is empty." }),
-      { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
-  }
-
   // ── Mark as processing (prevents duplicate calls) ─────────
-  await supabase
+  const { data: claimedQuestion, error: claimError } = await supabase
     .from("question_usage")
     .update({ status: "processing", updated_at: new Date().toISOString() })
-    .eq("id", questionUsageId);
+    .eq("id", questionUsageId)
+    .in("status", ["pending", "failed"])
+    .select("id")
+    .maybeSingle();
+
+  if (claimError || !claimedQuestion) {
+    return new Response(
+      JSON.stringify({ success: false, status: "processing", message: "Question is already being processed or its status changed. Please refresh before retrying." }),
+      { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
+  }
 
   // ── Call AI via AWS Lambda (existing HastVeda infrastructure) ──
   let answerText: string | null = null;

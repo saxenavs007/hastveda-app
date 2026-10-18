@@ -1,5 +1,5 @@
 // Ask HastVeda Screen
-// Premium: 2 questions included.
+// Premium: 2 lifetime questions included.
 // Everyone else: one question for ₹59 (₹50 + 18% GST) via Cashfree.
 //
 // FIX 5: question_usage row is created BEFORE Cashfree checkout opens,
@@ -475,7 +475,7 @@ class _AskHastVedaScreenState extends State<AskHastVedaScreen> {
       barrierDismissible: false,
       builder: (ctx) => AlertDialog(
         title: Text(
-          _isHindi ? '₹50 भुगतान प्राप्त हुआ' : '₹50 Payment Received',
+          _isHindi ? '₹59 भुगतान प्राप्त हुआ' : '₹59 Payment Received',
           style: const TextStyle(fontWeight: FontWeight.w700),
         ),
         content: Column(
@@ -484,8 +484,8 @@ class _AskHastVedaScreenState extends State<AskHastVedaScreen> {
           children: [
             Text(
               _isHindi
-                  ? 'आपका ₹50 भुगतान सफल रहा लेकिन ऐप बंद हो गया। कृपया अपना प्रश्न दोबारा दर्ज करें।'
-                  : 'Your ₹50 payment was successful but the app closed. Please re-enter your question.',
+                  ? 'आपका ₹59 भुगतान सफल रहा लेकिन ऐप बंद हो गया। कृपया अपना प्रश्न दोबारा दर्ज करें।'
+                  : 'Your ₹59 payment was successful but the app closed. Please re-enter your question.',
             ),
             const SizedBox(height: 12),
             TextField(
@@ -545,7 +545,6 @@ class _AskHastVedaScreenState extends State<AskHastVedaScreen> {
         setState(() => _isLoading = false);
         return;
       }
-      final monthStart = _istMonthStartIso();
       final results = await Future.wait([
         SupabaseService.instance.client
             .from('question_usage')
@@ -557,8 +556,7 @@ class _AskHastVedaScreenState extends State<AskHastVedaScreen> {
             .from('question_usage')
             .select('id')
             .eq('user_id', userId)
-            .eq('is_free', true)
-            .gte('created_at', monthStart),
+            .eq('is_free', true),
         SupabaseService.instance.client
             .from('user_profiles')
             .select('paid_question_balance')
@@ -591,16 +589,6 @@ class _AskHastVedaScreenState extends State<AskHastVedaScreen> {
       debugPrint('loadQuestionHistory error: $e');
       if (mounted) setState(() => _isLoading = false);
     }
-  }
-
-  String _istMonthStartIso() {
-    final shifted = DateTime.now().toUtc().add(
-      const Duration(hours: 5, minutes: 30),
-    );
-    final monthStartUtc = DateTime.utc(shifted.year, shifted.month, 1);
-    return monthStartUtc
-        .subtract(const Duration(hours: 5, minutes: 30))
-        .toIso8601String();
   }
 
   /// Calls the answer-hastveda-question Edge Function to process a question.
@@ -887,7 +875,6 @@ class _AskHastVedaScreenState extends State<AskHastVedaScreen> {
         await SupabaseService.instance.client
             .from('question_usage')
             .update({
-              'is_paid': true,
               'status': 'pending',
               'updated_at': DateTime.now().toIso8601String(),
             })
@@ -1012,7 +999,7 @@ class _AskHastVedaScreenState extends State<AskHastVedaScreen> {
           Text(
             _isHindi
                 ? 'अपनी हथेली के बारे में व्यक्तिगत प्रश्न पूछें। प्रीमियम के साथ 2 प्रश्न मुफ़्त।'
-                : 'Ask personalized questions about your palm reading. 2 questions included free with Premium.',
+                : 'Ask personalized questions about your palm reading. 2 lifetime questions included free with Premium.',
             textAlign: TextAlign.center,
             style: GoogleFonts.outfit(
               fontSize: 14,
@@ -1097,12 +1084,12 @@ class _AskHastVedaScreenState extends State<AskHastVedaScreen> {
                     Text(
                       hasFreeLeft
                           ? (_isHindi
-                                ? 'इस महीने $freeLeft मुफ़्त प्रश्न शेष'
-                                : '$freeLeft of 2 free questions left this month')
+                                ? 'जीवनभर के $freeLeft मुफ़्त प्रश्न शेष'
+                                : '$freeLeft of 2 lifetime free questions left')
                           : _isPremiumUser
                           ? (_isHindi
-                                ? 'इस महीने के मुफ़्त प्रश्न समाप्त — ₹59 प्रति प्रश्न, कोई सीमा नहीं'
-                                : 'Monthly free questions used — ₹59 each, no limit')
+                                ? 'जीवनभर के मुफ़्त प्रश्न समाप्त — ₹59 प्रति प्रश्न, कोई सीमा नहीं'
+                                : 'Lifetime free questions used — ₹59 each, no limit')
                           : (_isHindi
                                 ? '₹59 प्रति प्रश्न (₹50 + GST) · जितने चाहें'
                                 : '₹59 per question (₹50 + GST) · no limit'),
@@ -1396,7 +1383,7 @@ class _AskHastVedaScreenState extends State<AskHastVedaScreen> {
                               ),
                             ),
                             child: Text(
-                              isFree ? (_isHindi ? 'मुफ़्त' : 'Free') : '₹50',
+                              isFree ? (_isHindi ? 'मुफ़्त' : 'Free') : '₹59',
                               style: GoogleFonts.outfit(
                                 fontSize: 10,
                                 fontWeight: FontWeight.w700,
@@ -1648,8 +1635,8 @@ class _AskHastVedaScreenState extends State<AskHastVedaScreen> {
                     Text(
                       _isPremiumUser
                           ? (_isHindi
-                                ? 'प्रीमियम में हर महीने 2 मुफ़्त प्रश्न मिलते हैं। उसके बाद ₹59 प्रति प्रश्न।'
-                                : 'Premium includes 2 free questions each month. After that, each question is ₹59.')
+                                ? 'प्रीमियम में जीवनभर 2 मुफ़्त प्रश्न मिलते हैं। उसके बाद ₹59 प्रति प्रश्न।'
+                                : 'Premium includes 2 free questions for a lifetime. After that, each question is ₹59.')
                           : (_isHindi
                                 ? 'हर प्रश्न ₹59 (₹50 + GST) का है। जितने चाहें पूछ सकते हैं।'
                                 : 'Each question is ₹59 (₹50 + GST). Ask as many as you want.'),

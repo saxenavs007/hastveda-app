@@ -7,7 +7,7 @@ import {
 } from "../_shared/payment_fulfillment.ts";
 
 async function settlePaidOrder(
-  supabase: ReturnType<typeof createClient>,
+  supabase: ReturnType<typeof createClient<any>>,
   orderRecord: Record<string, unknown>,
   paymentId: string,
   isAskQuestion: boolean,
@@ -19,16 +19,12 @@ async function settlePaidOrder(
     .eq("id", userId)
     .maybeSingle();
 
-  try {
-    await grantQuestionAllowance(
-      supabase,
-      userId,
-      orderRecord.cashfree_order_id as string,
-      isAskQuestion,
-    );
-  } catch (err) {
-    console.error("[cashfree-webhook] Question allowance grant failed:", err);
-  }
+  await grantQuestionAllowance(
+    supabase,
+    userId,
+    orderRecord.cashfree_order_id as string,
+    isAskQuestion,
+  );
 
   try {
     await createInvoiceIfNeeded(
@@ -40,6 +36,55 @@ async function settlePaidOrder(
     );
   } catch (invoiceErr) {
     console.error("[cashfree-webhook] Invoice creation failed (non-fatal):", invoiceErr);
+  }
+}
+
+
+async function triggerQuestionAnswerIfReady(
+  supabase: ReturnType<typeof createClient<any>>,
+  supabaseUrl: string,
+  serviceKey: string,
+  cashfreeOrderId: string,
+  userId: string,
+): Promise<void> {
+  const { data: question, error } = await supabase
+    .from("question_usage")
+    .select("id, status, question_text")
+    .eq("payment_order_id", cashfreeOrderId)
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (error) throw new Error(`Could not load paid question: ${error.message}`);
+  if (!question) return;
+  if (!(question.question_text ?? "").trim()) {
+    if (question.status !== "payment_received_pending_question") {
+      const { error: recoveryError } = await supabase
+        .from("question_usage")
+        .update({ is_paid: true, status: "payment_received_pending_question", updated_at: new Date().toISOString() })
+        .eq("id", question.id);
+      if (recoveryError) throw new Error(`Could not preserve payment recovery record: ${recoveryError.message}`);
+    }
+    return;
+  }
+  if (question.status === "answered" || question.status === "processing") return;
+
+  const { error: updateError } = await supabase
+    .from("question_usage")
+    .update({ is_paid: true, status: "pending", updated_at: new Date().toISOString() })
+    .eq("id", question.id);
+  if (updateError) throw new Error(`Could not prepare paid question: ${updateError.message}`);
+
+  const response = await fetch(`${supabaseUrl}/functions/v1/answer-hastveda-question`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${serviceKey}`,
+      "x-internal-call": "cashfree-webhook",
+    },
+    body: JSON.stringify({ question_usage_id: question.id, user_id: userId }),
+  });
+  if (!response.ok) {
+    throw new Error(`Could not trigger answer function: HTTP ${response.status}`);
   }
 }
 
@@ -57,7 +102,7 @@ serve(async (req: Request) => {
       ? Deno.env.get("CASHFREE_SANDBOX_SECRET_KEY")!
       : Deno.env.get("CASHFREE_SECRET_KEY")!;
 
-    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    const supabase = createClient<any>(supabaseUrl, supabaseServiceKey);
 
     // ── Webhook signature verification ────────────────────────
     const rawBody = await req.text();
@@ -125,6 +170,9 @@ serve(async (req: Request) => {
         (orderRecord.payment_id as string) || cashfreeOrderId,
         isAskQuestion,
       );
+      if (isAskQuestion) {
+        await triggerQuestionAnswerIfReady(supabase, supabaseUrl, supabaseServiceKey, cashfreeOrderId, orderRecord.user_id);
+      }
       return new Response("OK", { status: 200 });
     }
 
@@ -137,6 +185,27 @@ serve(async (req: Request) => {
         paymentData?.cf_payment_id?.toString() ||
         paymentData?.payment_id?.toString() ||
         cashfreeOrderId;
+
+      // Validate the signed webhook's order amount/currency against our persisted order before fulfilment.
+      const webhookAmount = Number(orderData.order_amount);
+      const expectedAmount = Number(orderRecord.final_amount);
+      const webhookCurrency = String(orderData.order_currency ?? "");
+      const expectedCurrency = String(orderRecord.currency ?? "INR");
+      if (
+        !Number.isFinite(webhookAmount) ||
+        !Number.isFinite(expectedAmount) ||
+        Math.abs(webhookAmount - expectedAmount) > 0.01 ||
+        webhookCurrency !== expectedCurrency
+      ) {
+        console.error("[cashfree-webhook] Order amount/currency mismatch", {
+          cashfreeOrderId,
+          webhookAmount,
+          expectedAmount,
+          webhookCurrency,
+          expectedCurrency,
+        });
+        return new Response("Order amount/currency mismatch", { status: 400 });
+      }
 
       // Update order
       await supabase
@@ -160,19 +229,18 @@ serve(async (req: Request) => {
           .eq("user_id", orderRecord.user_id)
           .maybeSingle();
 
-        let questionId: string | null = null;
-
         if (existingQuestion) {
           await supabase
             .from("question_usage")
             .update({
               is_paid: true,
-              status: "pending",
+              status: (existingQuestion.question_text ?? "").trim()
+                ? "pending"
+                : "payment_received_pending_question",
               updated_at: new Date().toISOString(),
             })
             .eq("id", existingQuestion.id);
-          questionId = existingQuestion.id;
-          console.log(`[cashfree-webhook] Marked existing question ${questionId} as paid`);
+          console.log(`[cashfree-webhook] Marked existing question ${existingQuestion.id} as paid`);
         } else {
           console.log(`[cashfree-webhook] No question_usage row for order ${cashfreeOrderId} — creating recovery record`);
           const { data: recoveryRow } = await supabase
@@ -187,28 +255,7 @@ serve(async (req: Request) => {
             })
             .select("id")
             .maybeSingle();
-          questionId = recoveryRow?.id ?? null;
-          console.log(`[cashfree-webhook] Created recovery record: ${questionId}`);
-        }
-
-        if (questionId && existingQuestion?.question_text) {
-          try {
-            const answerUrl = `${supabaseUrl}/functions/v1/answer-hastveda-question`;
-            fetch(answerUrl, {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-                Authorization: `Bearer ${supabaseServiceKey}`,
-                "x-internal-call": "cashfree-webhook",
-              },
-              body: JSON.stringify({
-                question_usage_id: questionId,
-                user_id: orderRecord.user_id,
-              }),
-            }).catch((e) => console.error("[cashfree-webhook] Failed to trigger answer function:", e));
-          } catch (triggerError) {
-            console.error("[cashfree-webhook] Error triggering answer function:", triggerError);
-          }
+          console.log(`[cashfree-webhook] Created recovery record: ${recoveryRow?.id ?? null}`);
         }
 
       } else {
@@ -249,6 +296,9 @@ serve(async (req: Request) => {
       orderRecord.paid_at = new Date().toISOString();
       orderRecord.payment_id = paymentId;
       await settlePaidOrder(supabase, orderRecord, paymentId, isAskQuestion);
+      if (isAskQuestion) {
+        await triggerQuestionAnswerIfReady(supabase, supabaseUrl, supabaseServiceKey, cashfreeOrderId, orderRecord.user_id);
+      }
 
     } else if (
       eventType === "PAYMENT_FAILED_WEBHOOK" ||
