@@ -474,7 +474,7 @@ async function writeInbox(
   userIds: string[],
   notices: Map<string, MorningNotice>,
   snippets: Map<string, string>,
-  title: string,
+  hook: (typeof DAILY_HOOKS)[number],
   istKey: string,
   dayStart: string,
 ) {
@@ -484,15 +484,15 @@ async function writeInbox(
     return {
       user_id: userId,
       notification_type: "new_prediction",
-      title,
+      title: hook.title,
       body,
       data: {
         kind: "morning_curiosity",
         type: "morning_curiosity",
         route: "/notifications",
         ist_date: istKey,
-        teaser: TEASER,
-        question: QUESTION,
+        teaser: hook.teaser,
+        question: hook.question,
         push_sent: false,
       },
     };
