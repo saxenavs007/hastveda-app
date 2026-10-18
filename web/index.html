@@ -155,6 +155,10 @@
           document.body.appendChild(script);
         }
 
+        // Flutter must not depend on FCM/service-worker readiness. Start the UI
+        // immediately; messaging registration can complete independently.
+        startFlutter();
+
         if (!("serviceWorker" in navigator)) {
           console.error("[FCM] Service workers are unavailable in this browser.");
           startFlutter();
