@@ -151,8 +151,12 @@ FOR EACH ROW EXECUTE FUNCTION public.protect_question_billing_fields();
 
 DROP TRIGGER IF EXISTS trg_enforce_free_question_limit ON public.question_usage;
 CREATE TRIGGER trg_enforce_free_question_limit
-BEFORE INSERT OR UPDATE OF user_id, is_free
-ON public.question_usage
+BEFORE INSERT ON public.question_usage
+FOR EACH ROW EXECUTE FUNCTION public.enforce_free_question_limit();
+
+DROP TRIGGER IF EXISTS trg_enforce_free_question_limit_update ON public.question_usage;
+CREATE TRIGGER trg_enforce_free_question_limit_update
+BEFORE UPDATE OF user_id, is_free ON public.question_usage
 FOR EACH ROW EXECUTE FUNCTION public.enforce_free_question_limit();
 
 CREATE OR REPLACE FUNCTION public.consume_paid_question_credit(p_question_id uuid)
