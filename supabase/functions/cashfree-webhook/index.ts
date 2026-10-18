@@ -19,16 +19,12 @@ async function settlePaidOrder(
     .eq("id", userId)
     .maybeSingle();
 
-  try {
-    await grantQuestionAllowance(
-      supabase,
-      userId,
-      orderRecord.cashfree_order_id as string,
-      isAskQuestion,
-    );
-  } catch (err) {
-    console.error("[cashfree-webhook] Question allowance grant failed:", err);
-  }
+  await grantQuestionAllowance(
+    supabase,
+    userId,
+    orderRecord.cashfree_order_id as string,
+    isAskQuestion,
+  );
 
   try {
     await createInvoiceIfNeeded(
@@ -40,6 +36,45 @@ async function settlePaidOrder(
     );
   } catch (invoiceErr) {
     console.error("[cashfree-webhook] Invoice creation failed (non-fatal):", invoiceErr);
+  }
+}
+
+
+async function triggerQuestionAnswerIfReady(
+  supabase: ReturnType<typeof createClient>,
+  supabaseUrl: string,
+  serviceKey: string,
+  cashfreeOrderId: string,
+  userId: string,
+): Promise<void> {
+  const { data: question, error } = await supabase
+    .from("question_usage")
+    .select("id, status, question_text")
+    .eq("payment_order_id", cashfreeOrderId)
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (error) throw new Error(`Could not load paid question: ${error.message}`);
+  if (!question || !(question.question_text ?? "").trim()) return;
+  if (question.status === "answered" || question.status === "processing") return;
+
+  const { error: updateError } = await supabase
+    .from("question_usage")
+    .update({ is_paid: true, status: "pending", updated_at: new Date().toISOString() })
+    .eq("id", question.id);
+  if (updateError) throw new Error(`Could not prepare paid question: ${updateError.message}`);
+
+  const response = await fetch(`${supabaseUrl}/functions/v1/answer-hastveda-question`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${serviceKey}`,
+      "x-internal-call": "cashfree-webhook",
+    },
+    body: JSON.stringify({ question_usage_id: question.id, user_id: userId }),
+  });
+  if (!response.ok) {
+    throw new Error(`Could not trigger answer function: HTTP ${response.status}`);
   }
 }
 
@@ -125,6 +160,9 @@ serve(async (req: Request) => {
         (orderRecord.payment_id as string) || cashfreeOrderId,
         isAskQuestion,
       );
+      if (isAskQuestion) {
+        await triggerQuestionAnswerIfReady(supabase, supabaseUrl, supabaseServiceKey, cashfreeOrderId, orderRecord.user_id);
+      }
       return new Response("OK", { status: 200 });
     }
 
@@ -191,26 +229,6 @@ serve(async (req: Request) => {
           console.log(`[cashfree-webhook] Created recovery record: ${questionId}`);
         }
 
-        if (questionId && existingQuestion?.question_text) {
-          try {
-            const answerUrl = `${supabaseUrl}/functions/v1/answer-hastveda-question`;
-            fetch(answerUrl, {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-                Authorization: `Bearer ${supabaseServiceKey}`,
-                "x-internal-call": "cashfree-webhook",
-              },
-              body: JSON.stringify({
-                question_usage_id: questionId,
-                user_id: orderRecord.user_id,
-              }),
-            }).catch((e) => console.error("[cashfree-webhook] Failed to trigger answer function:", e));
-          } catch (triggerError) {
-            console.error("[cashfree-webhook] Error triggering answer function:", triggerError);
-          }
-        }
-
       } else {
         console.log(`[cashfree-webhook] Premium order paid: ${cashfreeOrderId} user=${orderRecord.user_id}`);
 
@@ -249,6 +267,9 @@ serve(async (req: Request) => {
       orderRecord.paid_at = new Date().toISOString();
       orderRecord.payment_id = paymentId;
       await settlePaidOrder(supabase, orderRecord, paymentId, isAskQuestion);
+      if (isAskQuestion) {
+        await triggerQuestionAnswerIfReady(supabase, supabaseUrl, supabaseServiceKey, cashfreeOrderId, orderRecord.user_id);
+      }
 
     } else if (
       eventType === "PAYMENT_FAILED_WEBHOOK" ||
