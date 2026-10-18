@@ -2,7 +2,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 type SupabaseClient = ReturnType<typeof createClient>;
 
-const PREMIUM_FREE_QUESTIONS = 2; // per IST month, while Premium is active
+const PREMIUM_FREE_QUESTIONS = 2; // lifetime allowance for a one-time Premium purchase
 const TOPUP_QUESTION_CREDIT = 1; // one paid question, no monthly cap
 
 export async function grantQuestionAllowance(
@@ -24,7 +24,7 @@ export async function grantQuestionAllowance(
       `[question-credits] ${grantType} grant failed for order=${cashfreeOrderId}:`,
       error,
     );
-    return;
+    throw new Error(`Question credit grant failed for order ${cashfreeOrderId}: ${error.message}`);
   }
   console.log(
     `[question-credits] ${grantType} recorded (${credits}) for order=${cashfreeOrderId}`,
