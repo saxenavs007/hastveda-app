@@ -123,6 +123,38 @@ BEGIN
 END;
 $$;
 
+-- Keep quota and payment identity fields server-controlled after question creation.
+CREATE OR REPLACE FUNCTION public.protect_question_billing_fields()
+RETURNS trigger
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public
+AS $
+BEGIN
+  IF COALESCE(auth.role(), '') <> 'service_role' AND (
+    NEW.user_id IS DISTINCT FROM OLD.user_id OR
+    NEW.is_free IS DISTINCT FROM OLD.is_free OR
+    NEW.is_paid IS DISTINCT FROM OLD.is_paid OR
+    NEW.payment_order_id IS DISTINCT FROM OLD.payment_order_id OR
+    NEW.paid_credit_applied IS DISTINCT FROM OLD.paid_credit_applied
+  ) THEN
+    RAISE EXCEPTION 'Question billing fields may only be changed by the payment service.'
+      USING ERRCODE = '42501';
+  END IF;
+  RETURN NEW;
+END;
+$;
+
+DROP TRIGGER IF EXISTS trg_00_protect_question_billing_fields ON public.question_usage;
+CREATE TRIGGER trg_00_protect_question_billing_fields
+BEFORE UPDATE OF user_id, is_free, is_paid, payment_order_id, paid_credit_applied
+ON public.question_usage
+FOR EACH ROW EXECUTE FUNCTION public.protect_question_billing_fields();
+
+DROP TRIGGER IF EXISTS trg_enforce_free_question_limit ON public.question_usage;
+CREATE TRIGGER trg_enforce_free_question_limit
+BEFORE INSERT OR UPDATE OF user_id, is_free
+ON public.question_usage
+FOR EACH ROW EXECUTE FUNCTION public.enforce_free_question_limit();
+
 CREATE OR REPLACE FUNCTION public.consume_paid_question_credit(p_question_id uuid)
 RETURNS jsonb
 LANGUAGE plpgsql SECURITY DEFINER SET search_path = public
