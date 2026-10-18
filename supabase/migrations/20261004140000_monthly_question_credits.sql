@@ -1,4 +1,4 @@
--- Premium free questions reset every IST calendar month.
+-- Premium lifetime purchase includes 2 free questions total, never monthly.
 -- Paid ₹50 + GST purchases add to paid_question_balance with no monthly cap.
 -- Answering a paid question consumes one stored credit, once.
 
@@ -20,8 +20,6 @@ AS $$
 DECLARE
   v_free_count INTEGER;
   v_has_premium BOOLEAN;
-  v_month_start timestamptz;
-  v_period date;
 BEGIN
   IF NEW.is_free IS NOT TRUE THEN
     RETURN NEW;
@@ -39,24 +37,19 @@ BEGIN
       USING ERRCODE = 'P0002';
   END IF;
 
-  v_month_start := date_trunc('month', now() AT TIME ZONE 'Asia/Kolkata')
-    AT TIME ZONE 'Asia/Kolkata';
-  v_period := (date_trunc('month', now() AT TIME ZONE 'Asia/Kolkata'))::date;
-
   SELECT COUNT(*) INTO v_free_count
   FROM public.question_usage
   WHERE user_id = NEW.user_id
-    AND is_free IS TRUE
-    AND created_at >= v_month_start;
+    AND is_free IS TRUE;
 
   IF v_free_count >= 2 THEN
-    RAISE EXCEPTION 'Free question quota exceeded. Premium includes 2 free questions each month. Additional questions cost ₹50 + GST each.'
+    RAISE EXCEPTION 'Free question quota exceeded. Premium includes 2 free questions in a lifetime. Additional questions cost ₹50 + 18% GST (₹59 total) each.'
       USING ERRCODE = 'P0001';
   END IF;
 
   UPDATE public.user_profiles
   SET free_questions_used = v_free_count + 1,
-      free_question_period = v_period,
+      free_question_period = NULL,
       free_question_quota = 2,
       updated_at = now()
   WHERE id = NEW.user_id;
