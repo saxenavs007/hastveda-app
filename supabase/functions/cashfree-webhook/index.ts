@@ -186,6 +186,27 @@ serve(async (req: Request) => {
         paymentData?.payment_id?.toString() ||
         cashfreeOrderId;
 
+      // Validate the signed webhook's order amount/currency against our persisted order before fulfilment.
+      const webhookAmount = Number(orderData.order_amount);
+      const expectedAmount = Number(orderRecord.final_amount);
+      const webhookCurrency = String(orderData.order_currency ?? "");
+      const expectedCurrency = String(orderRecord.currency ?? "INR");
+      if (
+        !Number.isFinite(webhookAmount) ||
+        !Number.isFinite(expectedAmount) ||
+        Math.abs(webhookAmount - expectedAmount) > 0.01 ||
+        webhookCurrency !== expectedCurrency
+      ) {
+        console.error("[cashfree-webhook] Order amount/currency mismatch", {
+          cashfreeOrderId,
+          webhookAmount,
+          expectedAmount,
+          webhookCurrency,
+          expectedCurrency,
+        });
+        return new Response("Order amount/currency mismatch", { status: 400 });
+      }
+
       // Update order
       await supabase
         .from("cashfree_orders")
