@@ -32,16 +32,12 @@ async function fulfillPaidOrder(
     .eq("id", userId)
     .maybeSingle();
 
-  try {
-    await grantQuestionAllowance(
-      supabase,
-      userId,
-      orderRecord.cashfree_order_id as string,
-      isAskQuestion,
-    );
-  } catch (err) {
-    console.error("[verify-cashfree-payment] Question allowance grant failed:", err);
-  }
+  await grantQuestionAllowance(
+    supabase,
+    userId,
+    orderRecord.cashfree_order_id as string,
+    isAskQuestion,
+  );
 
   try {
     await createInvoiceIfNeeded(
@@ -53,6 +49,45 @@ async function fulfillPaidOrder(
     );
   } catch (err) {
     console.error("[verify-cashfree-payment] Invoice creation failed (non-fatal):", err);
+  }
+}
+
+
+async function triggerQuestionAnswerIfReady(
+  supabase: ReturnType<typeof createClient>,
+  supabaseUrl: string,
+  serviceKey: string,
+  cashfreeOrderId: string,
+  userId: string,
+): Promise<void> {
+  const { data: question, error } = await supabase
+    .from("question_usage")
+    .select("id, status, question_text")
+    .eq("payment_order_id", cashfreeOrderId)
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (error) throw new Error(`Could not load paid question: ${error.message}`);
+  if (!question || !(question.question_text ?? "").trim()) return;
+  if (question.status === "answered" || question.status === "processing") return;
+
+  const { error: updateError } = await supabase
+    .from("question_usage")
+    .update({ is_paid: true, status: "pending", updated_at: new Date().toISOString() })
+    .eq("id", question.id);
+  if (updateError) throw new Error(`Could not prepare paid question: ${updateError.message}`);
+
+  const response = await fetch(`${supabaseUrl}/functions/v1/answer-hastveda-question`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${serviceKey}`,
+      "x-internal-call": "verify-cashfree-payment",
+    },
+    body: JSON.stringify({ question_usage_id: question.id, user_id: userId }),
+  });
+  if (!response.ok) {
+    throw new Error(`Could not trigger answer function: HTTP ${response.status}`);
   }
 }
 
@@ -134,6 +169,7 @@ serve(async (req: Request) => {
         isAskQuestion,
       );
       if (isAskQuestion) {
+        await triggerQuestionAnswerIfReady(supabase, supabaseUrl, supabaseServiceKey, cashfree_order_id, user.id);
         return new Response(
           JSON.stringify({
             success: true,
@@ -241,28 +277,12 @@ serve(async (req: Request) => {
           })
           .eq("id", questionRow.id);
 
-        try {
-          const answerUrl = `${supabaseUrl}/functions/v1/answer-hastveda-question`;
-          fetch(answerUrl, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${supabaseServiceKey}`,
-              "x-internal-call": "verify-cashfree-payment",
-            },
-            body: JSON.stringify({
-              question_usage_id: questionRow.id,
-              user_id: user.id,
-            }),
-          }).catch((e) => console.error("[verify-cashfree-payment] Failed to trigger answer function:", e));
-        } catch (triggerError) {
-          console.error("[verify-cashfree-payment] Error triggering answer function:", triggerError);
-        }
       } else {
         console.log(`[verify-cashfree-payment] No question_usage row found for order ${cashfree_order_id} — webhook recovery will handle it`);
       }
 
       await fulfillPaidOrder(supabase, orderRecord, user.id, paymentId, true);
+      await triggerQuestionAnswerIfReady(supabase, supabaseUrl, supabaseServiceKey, cashfree_order_id, user.id);
 
       return new Response(
         JSON.stringify({
